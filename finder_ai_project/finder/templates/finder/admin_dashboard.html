@@ -1,0 +1,153 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finder AI — Modération & Administration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=15">
+  <style>
+    body { background-color: #16120d; color: #f2ece3; font-family: 'Inter', sans-serif; margin: 0; padding: 24px; }
+    .admin-container { max-width: 1200px; margin: 0 auto; }
+    .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; }
+    .admin-header h1 { font-family: 'Source Serif 4', serif; font-size: 24px; font-weight: 700; color: #f2ece3; margin: 0; display: flex; align-items: center; gap: 12px; }
+    .admin-header .badge-staff { background: rgba(232,164,74,0.15); color: #e8a44a; border: 1px solid rgba(232,164,74,0.3); padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; font-family: 'Inter', sans-serif; }
+    .admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 36px; }
+    .stat-card { background: #1e1a14; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 20px; text-align: center; }
+    .stat-card h3 { font-family: 'Source Serif 4', serif; font-size: 32px; font-weight: 700; color: #e8a44a; margin: 0 0 6px 0; }
+    .stat-card p { font-size: 13px; color: #9a8e80; margin: 0; }
+    .admin-section { background: #1e1a14; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 24px; margin-bottom: 32px; }
+    .admin-section h2 { font-size: 18px; font-weight: 600; color: #f2ece3; margin-top: 0; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    .admin-table th { background: #26211a; padding: 12px 16px; color: #cdc4b8; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .admin-table td { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); color: #cdc4b8; }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .btn-action { padding: 6px 14px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-approve { background: #6abf85; color: #1a1208; margin-right: 6px; font-weight: 700; }
+    .btn-approve:hover { opacity: 0.9; }
+    .btn-reject { background: rgba(224,97,75,0.2); color: #e0614b; border: 1px solid rgba(224,97,75,0.4); }
+    .btn-reject:hover { background: rgba(224,97,75,0.3); }
+    .btn-back { background: rgba(255,255,255,0.08); color: #f2ece3; text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; transition: background 0.2s; }
+    .btn-back:hover { background: rgba(255,255,255,0.15); }
+    .alert-banner { background: rgba(106,191,133,0.15); border: 1px solid rgba(106,191,133,0.3); color: #6abf85; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <header class="admin-header">
+      <h1>
+        Finder AI
+        <span class="badge-staff">Modération & Administration</span>
+      </h1>
+      <a href="{% url 'liste_outils' %}" class="btn-back">← Retour au Workspace</a>
+    </header>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert-banner">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="admin-stats">
+      <div class="stat-card">
+        <h3>{{ total_attente }}</h3>
+        <p>Propositions en attente</p>
+      </div>
+      <div class="stat-card">
+        <h3>{{ total_valides }}</h3>
+        <p>Références IA validées</p>
+      </div>
+      <div class="stat-card">
+        <h3>{{ total_outils }}</h3>
+        <p>Total références en base</p>
+      </div>
+      <div class="stat-card">
+        <h3>{{ total_avis }}</h3>
+        <p>Avis publiés</p>
+      </div>
+    </div>
+
+    <!-- Section : Propositions d'outils en attente de modération -->
+    <section class="admin-section">
+      <h2>
+        Propositions de la communauté en attente
+        <span style="font-size:13px; color:#e8a44a; font-weight:normal;">{{ outils_en_attente|length }} à traiter</span>
+      </h2>
+
+      {% if outils_en_attente %}
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Nom de la référence IA</th>
+            <th>Catégorie</th>
+            <th>Tarification</th>
+            <th>Soumis par</th>
+            <th>URL officielle</th>
+            <th>Actions de modération</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in outils_en_attente %}
+          <tr>
+            <td>
+              <strong style="color:#f2ece3;">{{ o.nom }}</strong>
+              <div style="font-size:12px; color:#9a8e80; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.description }}</div>
+            </td>
+            <td>{{ o.categorie.nom|default:"Général" }}</td>
+            <td><span style="background:rgba(255,255,255,0.06); padding:2px 8px; border-radius:4px; font-size:12px;">{{ o.type_tarification }}</span></td>
+            <td>{{ o.soumis_par.username|default:"Anonyme" }}</td>
+            <td><a href="{{ o.url_site }}" target="_blank" style="color:#e8a44a; text-decoration:none;">{{ o.url_site }}</a></td>
+            <td>
+              <form method="post" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="outil_id" value="{{ o.id }}">
+                <button type="submit" name="action" value="valider" class="btn-action btn-approve">✓ Valider</button>
+                <button type="submit" name="action" value="refuser" class="btn-action btn-reject" onclick="return confirm('Refuser et supprimer cette proposition ?');">✗ Refuser</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:#9a8e80; text-align:center; padding:32px 0; margin:0;">Toutes les propositions de la communauté ont été modérées. Aucune tâche en attente !</p>
+      {% endif %}
+    </section>
+
+    <!-- Section : Derniers outils validés -->
+    <section class="admin-section">
+      <h2>Dernières références IA au catalogue</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Catégorie</th>
+            <th>Tarification</th>
+            <th>Score Moyen</th>
+            <th>URL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in outils_valides %}
+          <tr>
+            <td><strong style="color:#f2ece3;">{{ o.nom }}</strong></td>
+            <td>{{ o.categorie.nom|default:"Général" }}</td>
+            <td>{{ o.type_tarification }}</td>
+            <td>⭐ {{ o.calculer_score }} / 5</td>
+            <td><a href="{{ o.url_site }}" target="_blank" style="color:#e8a44a; text-decoration:none;">Accéder</a></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" style="text-align:center; color:#9a8e80;">Aucune référence IA validée.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+</body>
+</html>

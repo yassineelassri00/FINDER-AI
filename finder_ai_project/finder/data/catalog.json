@@ -1,0 +1,400 @@
+{
+  "version": 1,
+  "categories": [
+    {"slug": "assistant-de-code", "nom": "Assistant de Code"},
+    {"slug": "data", "nom": "Data / ML / Analytics"},
+    {"slug": "automatisation", "nom": "Automatisation & Productivité"},
+    {"slug": "recherche", "nom": "Recherche & Connaissances"},
+    {"slug": "design", "nom": "Design & Création"},
+    {"slug": "general", "nom": "Général"}
+  ],
+  "tools": [
+    {
+      "nom": "GitHub Copilot",
+      "description": "Assistant de complétion et de paire de code intégré aux IDE. Génère des suggestions contextuelles, répond aux questions sur le code et s'appuie sur vos dépôts pour personnaliser les recommandations.",
+      "url_site": "https://github.com/features/copilot",
+      "type_tarification": "Payant",
+      "type_integration": "Extension IDE",
+      "categorie": "assistant-de-code",
+      "tags": ["copilot", "auto-completion", "ide", "productivite"]
+    },
+    {
+      "nom": "Cursor",
+      "description": "Éditeur de code basé sur VS Code avec IA intégrée : autocomplétion, édition multi-fichiers, agents capables de modifier le projet et recherche contextuelle dans le dépôt.",
+      "url_site": "https://www.cursor.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Application desktop",
+      "categorie": "assistant-de-code",
+      "tags": ["ide", "agents", "autocompletion", "editeur"]
+    },
+    {
+      "nom": "Claude Code",
+      "description": "Agent de codage en ligne de commande d'Anthropic : planifie et exécute des modifications dans un dépôt, exécute des commandes, et garde le contexte des tâches longues.",
+      "url_site": "https://www.anthropic.com/claude-code",
+      "type_tarification": "Payant",
+      "type_integration": "CLI / Terminal",
+      "categorie": "assistant-de-code",
+      "tags": ["agent", "cli", "terminal", "anthropic"]
+    },
+    {
+      "nom": "Amazon Q Developer",
+      "description": "Assistant de développement d'AWS : complétion de code, agent de résolution de tickets, analyse de sécurité et migration de code legacy, intégré à la console AWS et aux IDE.",
+      "url_site": "https://aws.amazon.com/q/developer/",
+      "type_tarification": "Freemium",
+      "type_integration": "Extension IDE",
+      "categorie": "assistant-de-code",
+      "tags": ["aws", "cloud", "securite", "agent"]
+    },
+    {
+      "nom": "Continue",
+      "description": "Assistant de codage open-source et auto-hébergeable : complétion locale, chat dans l'IDE, RAG sur votre code, compatible avec de nombreux modèles (OpenAI, Ollama, etc.).",
+      "url_site": "https://www.continue.dev",
+      "type_tarification": "Open-Source",
+      "type_integration": "Extension IDE",
+      "categorie": "assistant-de-code",
+      "tags": ["open-source", "self-hosted", "llm", "chat"]
+    },
+    {
+      "nom": "Aider",
+      "description": "Outil de programmation en paire piloté par ligne de commande : édite le code directement dans le dépôt Git, génère des commits structurés et travaille avec n'importe quel LLM.",
+      "url_site": "https://aider.chat",
+      "type_tarification": "Open-Source",
+      "type_integration": "CLI / Terminal",
+      "categorie": "assistant-de-code",
+      "tags": ["cli", "git", "open-source", "pair-programming"]
+    },
+    {
+      "nom": "OpenHands",
+      "description": "Plateforme d'agents de développement open-source : planifie, code et exécute des tâches dans un environnement sandbox, avec interface web collaborative.",
+      "url_site": "https://github.com/All-Hands-AI/OpenHands",
+      "type_tarification": "Open-Source",
+      "type_integration": "SaaS",
+      "categorie": "assistant-de-code",
+      "tags": ["agents", "open-source", "sandbox", "devops"]
+    },
+    {
+      "nom": "Qodo (Codium)",
+      "description": "Suite d'IA pour la qualité du code : génération de tests, revue de code automatisée, couverture intelligente et intégration CI/CD.",
+      "url_site": "https://www.qodo.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Extension IDE",
+      "categorie": "assistant-de-code",
+      "tags": ["tests", "code-review", "qa", "ci"]
+    },
+    {
+      "nom": "Windsurf",
+      "description": "IDE IA de Codeium : édition assistée par agent, cascade d'actions contextuelles et complétion instantanée, pensé pour les flux de développement modernes.",
+      "url_site": "https://windsurf.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Application desktop",
+      "categorie": "assistant-de-code",
+      "tags": ["ide", "agent", "autocompletion", "codeium"]
+    },
+    {
+      "nom": "Tabnine",
+      "description": "Complétion de code privée et personnalisable : modèles entraînables sur vos bases de code, priorité à la confidentialité des données.",
+      "url_site": "https://www.tabnine.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Extension IDE",
+      "categorie": "assistant-de-code",
+      "tags": ["autocompletion", "prive", "ide", "models"]
+    },
+    {
+      "nom": "Hugging Face Hub",
+      "description": "Plateforme centrale des modèles d'IA : plus d'un million de modèles, datasets et démos, espaces d'hébergement et API d'inférence pour le MLOps.",
+      "url_site": "https://huggingface.co",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "data",
+      "tags": ["ml", "llm", "dataset", "api", "open-source"]
+    },
+    {
+      "nom": "LangChain",
+      "description": "Framework open-source pour développer des applications basées sur les LLM : chaînes, agents, RAG, intégrations vectorielles et outils d'orchestration.",
+      "url_site": "https://www.langchain.com",
+      "type_tarification": "Open-Source",
+      "type_integration": "Framework",
+      "categorie": "data",
+      "tags": ["llm", "rag", "agents", "framework", "python"]
+    },
+    {
+      "nom": "Weights & Biases",
+      "description": "Plateforme de suivi d'expériences ML : logging de métriques, visualisation de courbes, gestion des essais et collaboration pour les équipes data science.",
+      "url_site": "https://wandb.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "data",
+      "tags": ["ml", "experimentation", "monitoring", "team"]
+    },
+    {
+      "nom": "Jupyter AI",
+      "description": "Extension officielle de Jupyter : assistants IA génératifs directement dans les notebooks et lab, avec support multi-fournisseurs (local et cloud).",
+      "url_site": "https://github.com/jupyterlab/jupyter-ai",
+      "type_tarification": "Open-Source",
+      "type_integration": "Extension IDE",
+      "categorie": "data",
+      "tags": ["notebook", "open-source", "llm", "data-science"]
+    },
+    {
+      "nom": "DataRobot",
+      "description": "Plateforme d'IA pour entreprises : autoML, déploiement et monitoring de modèles prédictifs avec gouvernance et explicabilité.",
+      "url_site": "https://www.datarobot.com",
+      "type_tarification": "Payant",
+      "type_integration": "SaaS",
+      "categorie": "data",
+      "tags": ["automl", "mlops", "entreprise", "governance"]
+    },
+    {
+      "nom": "Hex",
+      "description": "Plateforme de data science collaborative : notebooks avec SQL et Python, partage interactif, pipelines et applications de données connectées.",
+      "url_site": "https://hex.tech",
+      "type_tarification": "Payant",
+      "type_integration": "SaaS",
+      "categorie": "data",
+      "tags": ["notebook", "sql", "collaboration", "analytics"]
+    },
+    {
+      "nom": "Julius AI",
+      "description": "Assistant d'analyse de données en langage naturel : importe vos fichiers, écrit du Python, produit des visualisations et des interprétations statistiques.",
+      "url_site": "https://julius.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "data",
+      "tags": ["analytics", "visualisation", "csv", "no-code"]
+    },
+    {
+      "nom": "Deepnote",
+      "description": "Notebook de données collaboratif : environnement Jupyter managé, déploiement de dashboards et intégration des bases de données en quelques clics.",
+      "url_site": "https://deepnote.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "data",
+      "tags": ["notebook", "cloud", "dashboard", "collaboration"]
+    },
+    {
+      "nom": "Zapier AI",
+      "description": "Plateforme d'automatisation no-code enrichie d'IA : intégration de milliers d'applications, agents et copilotes pour automatiser les tâches répétitives.",
+      "url_site": "https://zapier.com/ai",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "automatisation",
+      "tags": ["no-code", "integration", "workflow", "agents"]
+    },
+    {
+      "nom": "Make",
+      "description": "Plateforme d'automatisation visuelle : scénarios avec connecteurs, traitement de données et fonctionnalités IA pour relier vos applications sans code.",
+      "url_site": "https://www.make.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "automatisation",
+      "tags": ["no-code", "integration", "workflow", "connectors"]
+    },
+    {
+      "nom": "n8n",
+      "description": "Outil d'automatisation de workflows open-source : éditeur visuel, self-hosted ou cloud, plus de 400 nœuds d'intégration et support des agents IA.",
+      "url_site": "https://n8n.io",
+      "type_tarification": "Open-Source",
+      "type_integration": "SaaS",
+      "categorie": "automatisation",
+      "tags": ["open-source", "workflow", "self-hosted", "agents"]
+    },
+    {
+      "nom": "CrewAI",
+      "description": "Framework d'agents IA en Python : crée des équipes d'agents collaboratifs avec rôles, outils et flux de travail orientés tâches.",
+      "url_site": "https://www.crewai.com",
+      "type_tarification": "Open-Source",
+      "type_integration": "Framework",
+      "categorie": "automatisation",
+      "tags": ["agents", "python", "orchestration", "framework"]
+    },
+    {
+      "nom": "Apache Airflow",
+      "description": "Orchestrateur de workflows data : programmation des pipelines en code Python, scheduling, monitoring et gestion des dépendances complexes.",
+      "url_site": "https://airflow.apache.org",
+      "type_tarification": "Open-Source",
+      "type_integration": "Framework",
+      "categorie": "automatisation",
+      "tags": ["data-pipeline", "orchestration", "python", "scheduler"]
+    },
+    {
+      "nom": "Retool",
+      "description": "Plateforme low-code pour construire des outils internes : interfaces connectées aux bases de données et API, avec composants IA intégrés.",
+      "url_site": "https://retool.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "automatisation",
+      "tags": ["low-code", "admin-panel", "api", "dashboard"]
+    },
+    {
+      "nom": "Bubble",
+      "description": "Plateforme no-code de création d'applications web : workflow visuel, base de données intégrée et plugins IA pour lancer des MVPs rapidement.",
+      "url_site": "https://bubble.io",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "automatisation",
+      "tags": ["no-code", "app-builder", "mvp", "workflow"]
+    },
+    {
+      "nom": "Perplexity",
+      "description": "Moteur de réponse intelligent : recherche en ligne en temps réel avec sources citées, mode approfondi et assistants personnalisés.",
+      "url_site": "https://www.perplexity.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["search", "sources", "chat", "web"]
+    },
+    {
+      "nom": "ChatGPT",
+      "description": "Assistant conversationnel d'OpenAI : génération de texte, analyse de documents, vision, outils et API pour intégrer l'IA générative.",
+      "url_site": "https://chatgpt.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["chat", "llm", "api", "multimodal"]
+    },
+    {
+      "nom": "Claude",
+      "description": "Assistant IA d'Anthropic : grandes fenêtres de contexte, analyse de documents longs, code, écriture et intégration API.",
+      "url_site": "https://claude.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["chat", "llm", "anthropic", "context"]
+    },
+    {
+      "nom": "Gemini",
+      "description": "Assistant IA de Google : recherche, génération, code, multimodale, intégré à l'écosystème Google Workspace et disponible via API.",
+      "url_site": "https://gemini.google.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["chat", "llm", "google", "multimodal"]
+    },
+    {
+      "nom": "Elicit",
+      "description": "Assistant de recherche académique : extrait les résultats de la littérature scientifique, résume les articles et compare les études pertinentes.",
+      "url_site": "https://elicit.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["academic", "papers", "literature", "research"]
+    },
+    {
+      "nom": "Consensus",
+      "description": "Moteur de recherche fondé sur les études scientifiques : répond aux questions avec des conclusions tirées de publications évaluées par les pairs.",
+      "url_site": "https://consensus.app",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["academic", "evidence", "papers", "search"]
+    },
+    {
+      "nom": "NotebookLM",
+      "description": "Carnet de notes IA de Google : importez vos documents, posez des questions, générez des résumés et des podcasts audio depuis vos sources.",
+      "url_site": "https://notebooklm.google.com",
+      "type_tarification": "Gratuit",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["notes", "documents", "summary", "google"]
+    },
+    {
+      "nom": "Phind",
+      "description": "Moteur de recherche technique pour développeurs : réponses précises sur le code, les API et la documentation avec sources à l'appui.",
+      "url_site": "https://www.phind.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "recherche",
+      "tags": ["search", "dev", "docs", "technical"]
+    },
+    {
+      "nom": "Midjourney",
+      "description": "Générateur d'images photoréalistes à partir de prompts textuels : qualité artistique élevée, contrôle des styles et des paramètres de rendu.",
+      "url_site": "https://www.midjourney.com",
+      "type_tarification": "Payant",
+      "type_integration": "Web / API",
+      "categorie": "design",
+      "tags": ["image", "generation", "artistique", "prompt"]
+    },
+    {
+      "nom": "Stable Diffusion",
+      "description": "Modèles de génération d'images open-source : diffusion stable locale, fine-tuning et intégration dans vos propres pipelines créatifs.",
+      "url_site": "https://stability.ai",
+      "type_tarification": "Open-Source",
+      "type_integration": "CLI / Terminal",
+      "categorie": "design",
+      "tags": ["image", "open-source", "local", "diffusion"]
+    },
+    {
+      "nom": "DALL·E",
+      "description": "Modèle de génération d'images d'OpenAI : création d'illustrations à partir de descriptions, éditeur dans ChatGPT et API dédiée.",
+      "url_site": "https://openai.com",
+      "type_tarification": "Payant",
+      "type_integration": "Web / API",
+      "categorie": "design",
+      "tags": ["image", "openai", "api", "generation"]
+    },
+    {
+      "nom": "Figma AI",
+      "description": "Fonctionnalités IA de Figma : génération de designs, recherche de composants, renommage automatique et assistants pour les maquettes UI.",
+      "url_site": "https://www.figma.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "design",
+      "tags": ["ui", "design", "prototype", "collaboration"]
+    },
+    {
+      "nom": "Canva AI",
+      "description": "Suite de création graphique avec IA : génération d'images, de textes, de présentations et de vidéos, templates professionnels accessibles.",
+      "url_site": "https://www.canva.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "design",
+      "tags": ["graphisme", "templates", "no-code", "presentation"]
+    },
+    {
+      "nom": "Runway",
+      "description": "Plateforme de création vidéo IA : génération et édition de vidéos, effets, green screen intelligent et outils pour créateurs et studios.",
+      "url_site": "https://runwayml.com",
+      "type_tarification": "Freemium",
+      "type_integration": "SaaS",
+      "categorie": "design",
+      "tags": ["video", "generation", "editing", "vfx"]
+    },
+    {
+      "nom": "Ideogram",
+      "description": "Générateur d'images avec rendu de texte précis : idéal pour logos, affiches et designs typographiques pilotés par prompt.",
+      "url_site": "https://ideogram.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "design",
+      "tags": ["image", "texte", "logo", "prompt"]
+    },
+    {
+      "nom": "Suno",
+      "description": "Générateur de musique et de chansons par IA : composition de morceaux complets avec paroles, styles variés et partage communautaire.",
+      "url_site": "https://suno.com",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "design",
+      "tags": ["audio", "musique", "generation", "creation"]
+    },
+    {
+      "nom": "Ollama",
+      "description": "Exécution locale de modèles de langage : téléchargez et lancez des LLM open-source en local, serveur API compatible et gestion des modèles.",
+      "url_site": "https://ollama.com",
+      "type_tarification": "Open-Source",
+      "type_integration": "CLI / Terminal",
+      "categorie": "general",
+      "tags": ["llm", "local", "open-source", "cli"]
+    },
+    {
+      "nom": "Mistral AI",
+      "description": "Modèles de langage européens performants : API cloud, modèles open-source et offres spécialisées pour les entreprises (La Plateforme).",
+      "url_site": "https://mistral.ai",
+      "type_tarification": "Freemium",
+      "type_integration": "Web / API",
+      "categorie": "general",
+      "tags": ["llm", "api", "europe", "open-source"]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280" fill="none" role="img" aria-label="Finder AI">
+  <defs>
+    <linearGradient id="ring" x1="40" y1="40" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a78bfa"/>
+      <stop offset="0.5" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+    <radialGradient id="ambient" cx="50%" cy="45%" r="55%">
+      <stop stop-color="rgba(124,58,237,0.22)"/>
+      <stop offset="1" stop-color="rgba(8,8,12,0)"/>
+    </radialGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="140" cy="140" r="130" fill="url(#ambient)"/>
+  <circle cx="140" cy="118" r="52" stroke="url(#ring)" stroke-width="8" filter="url(#softGlow)"/>
+  <path d="M178 156l38 38" stroke="url(#ring)" stroke-width="8" stroke-linecap="round" filter="url(#softGlow)"/>
+  <text x="140" y="228" text-anchor="middle" fill="#f4f2f8" font-family="Inter, system-ui, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5">Finder AI</text>
+  <text x="140" y="252" text-anchor="middle" fill="#9490a8" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="500" letter-spacing="2.5">RÉFÉRENCES IA</text>
+</svg>

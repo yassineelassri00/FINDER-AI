@@ -1,0 +1,472 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <meta name="theme-color" content="#08111d">
+  <title>Finder AI — Références IA par mots-clés</title>
+  <meta name="description" content="Saisissez un mot-clé, obtenez des références IA classées par pertinence — adaptées à votre métier, votre budget et votre contexte professionnel.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/auth.css' %}?v=8">
+</head>
+<body class="auth-body">
+
+  <!-- ==================== SPLASH SCREEN ==================== -->
+  <div id="splashScreen" class="splash-screen start-screen">
+    <div class="start-stage">
+      <img
+        src="{% static 'img/logo_demarrage.png' %}"
+        alt="Finder AI"
+        class="start-logo"
+        draggable="false"
+        width="540"
+        height="540"
+      >
+      <button
+        type="button"
+        id="splashStartBtn"
+        class="start-cta"
+        data-authenticated="{% if already_authenticated %}true{% else %}false{% endif %}"
+      >
+        Commencer
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== AUTH SHELL ==================== -->
+  <main class="auth-shell" id="authShell" hidden {% if already_authenticated %}data-goto="{% url 'liste_outils' %}"{% endif %}>
+
+    <!-- Panneau gauche branding -->
+    <section class="auth-aside" aria-labelledby="authBrandTitle">
+      <a class="auth-brand" href="{% url 'landing' %}" aria-label="Finder AI — Accueil">
+        <img src="{% static 'img/logo_Finder.ai.jpg' %}" alt="" class="auth-brand-img" width="34" height="34">
+        <span>Finder AI</span>
+      </a>
+      <div class="auth-aside-copy">
+        <p class="eyebrow">RÉFÉRENCES IA PAR MOTS-CLÉS</p>
+        <h1 id="authBrandTitle">Un mot-clé. Les bonnes références IA.</h1>
+        <p>Saisissez ce que vous cherchez — Finder AI analyse votre demande, interroge le catalogue et le web, puis vous restitue des références classées par pertinence selon votre profil.</p>
+      </div>
+      <ul class="auth-benefits" aria-label="Avantages Finder AI">
+        <li><span>01</span>Recherche sémantique : vos mots-clés trouvent les outils les plus pertinents</li>
+        <li><span>02</span>Sources vérifiées et recherche web approfondie pour chaque requête</li>
+        <li><span>03</span>Filtres par catégorie, tag, budget et contexte professionnel</li>
+        <li><span>04</span>Favoris, projets et historique pour organiser vos découvertes</li>
+      </ul>
+      <p class="auth-footnote">Vos préférences d'inscription servent uniquement à calibrer vos recommandations — modifiables à tout moment.</p>
+    </section>
+
+    <!-- Panneau droit formulaires -->
+    <section class="auth-content" aria-live="polite">
+      {% if messages %}
+        <div class="auth-messages" role="alert">
+          {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- LOGIN -->
+      <div class="auth-panel" id="loginPanel">
+        <p class="eyebrow">BON RETOUR</p>
+        <h2>Accédez à votre espace de recherche.</h2>
+        <p class="panel-intro">Retrouvez vos recherches par mots-clés, vos projets et vos références IA favorites.</p>
+        <form method="post" action="{% url 'login' %}" class="auth-form" id="loginForm">
+          {% csrf_token %}
+          <label>Nom d'utilisateur
+            <input name="username" type="text" autocomplete="username" placeholder="ex. yassine.dev" required autofocus>
+          </label>
+          <label>Mot de passe
+            <input name="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required>
+          </label>
+          <button class="primary-button" type="submit" style="width:100%;">Se connecter &#8594;</button>
+        </form>
+        <p class="auth-switch">Nouveau sur Finder AI ? <button type="button" class="text-button" id="openSignupModalBtn">Créer mon espace</button></p>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ==================== SIGNUP MODAL ==================== -->
+  <!--
+    La modale d'inscription est en dehors de auth-shell pour s'afficher
+    par-dessus la page entière. Le formulaire pointe vers l'URL register Django.
+  -->
+  <div
+    class="signup-modal-overlay"
+    id="signupModalOverlay"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="signupModalTitle"
+  >
+    <div class="signup-modal" id="signupModal">
+
+      <!-- ── MODAL HEADER ── -->
+      <div class="signup-modal-header">
+        <div class="modal-brand">
+          <img src="{% static 'img/logo-finder-mark.svg' %}" alt="" class="modal-brand-img" aria-hidden="true" width="28" height="28">
+          <span>Finder AI — Créer mon espace</span>
+        </div>
+        <button type="button" class="modal-close-btn" id="closeSignupModalBtn" aria-label="Fermer">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- ── PROGRESS BAR ── -->
+      <div class="signup-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25" id="signupProgressBar">
+        <div class="signup-progress-fill" id="signupProgressFill" style="width: 25%;"></div>
+      </div>
+
+      <!-- ── TICKET VIEWPORT ── -->
+      <div class="signup-modal-body">
+        <div class="ticket-viewport" id="ticketViewport">
+
+          <!-- ═══════ TICKET 1 — Informations Personnelles ═══════ -->
+          <section class="signup-ticket" id="ticket-0" data-ticket="0">
+            <div class="ticket-header">
+              <div class="ticket-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              </div>
+              <div class="ticket-meta">
+                <p class="ticket-label" id="signupModalTitle">Étape 1 sur 4 — Identité</p>
+                <h2 class="ticket-title">Vos informations personnelles</h2>
+                <p class="ticket-desc">Commencez par l'essentiel. Vous pourrez modifier ces informations à tout moment dans les paramètres.</p>
+              </div>
+            </div>
+
+            <form method="post" action="{% url 'register' %}" id="signupForm" class="ticket-form" novalidate>
+              {% csrf_token %}
+
+              <!-- Champs ticket 1 -->
+              <div class="form-row">
+                <label>Nom complet
+                  <input name="full_name" type="text" autocomplete="name" placeholder="Prénom Nom" required id="t1FullName">
+                </label>
+                <label>Nom d'utilisateur
+                  <input name="username" type="text" autocomplete="username" placeholder="ex. yassine.dev" pattern="[A-Za-z0-9_.\\-]{3,150}" required id="t1Username">
+                </label>
+              </div>
+
+              <label>Email professionnel
+                <input name="email" type="email" autocomplete="email" placeholder="vous@entreprise.ma" required id="t1Email">
+              </label>
+
+              <label>Organisation <span class="optional">facultatif</span>
+                <input name="organization" type="text" list="org-suggestions" placeholder="Entreprise, équipe ou projet" autocomplete="off" id="t1Org">
+                <datalist id="org-suggestions">
+                  <option value="Start-up technologique">
+                  <option value="PME / ETI">
+                  <option value="Grande entreprise">
+                  <option value="Cabinet de conseil">
+                  <option value="Freelance / Indépendant">
+                  <option value="Université / Laboratoire de recherche">
+                  <option value="Administration publique">
+                </datalist>
+              </label>
+
+              <div class="form-row">
+                <label>Mot de passe
+                  <input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum" required>
+                </label>
+                <label>Confirmer le mot de passe
+                  <input name="password_confirmation" type="password" autocomplete="new-password" minlength="8" placeholder="Répétez le mot de passe" required id="t1PasswordConfirm">
+                </label>
+              </div>
+              <p class="field-hint" id="passwordHint">Utilisez au moins 8 caractères, avec lettres, chiffres et symbole si possible.</p>
+
+              <!-- Champs cachés tickets 2–4 (soumis avec le formulaire) -->
+              <input name="job_role"          type="hidden" id="h_job_role">
+              <input name="experience_level"  type="hidden" id="h_experience_level">
+              <input name="goals"             type="hidden" id="h_goals">
+              <input name="research_sources"  type="hidden" id="h_research_sources">
+              <input name="technology_stack"  type="hidden" id="h_technology_stack">
+              <input name="budget_preference" type="hidden" id="h_budget_preference">
+              <input name="result_style"      type="hidden" id="h_result_style">
+              <input name="preferred_language" type="hidden" id="h_preferred_language">
+              <input name="watch_frequency"   type="hidden" id="h_watch_frequency">
+
+            </form>
+          </section>
+
+          <!-- ═══════ TICKET 2 — Profil Métier ═══════ -->
+          <section class="signup-ticket" id="ticket-1" data-ticket="1">
+            <div class="ticket-header">
+              <div class="ticket-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+              </div>
+              <div class="ticket-meta">
+                <p class="ticket-label">Étape 2 sur 4 — Profil Métier</p>
+                <h2 class="ticket-title">Votre contexte professionnel</h2>
+                <p class="ticket-desc">Vos objectifs orientent le classement des références IA — pertinence, sources et niveau de détail adaptés à votre usage.</p>
+              </div>
+            </div>
+
+            <div class="ticket-form">
+              <div class="form-row">
+                <label>Votre métier <span style="color:var(--accent);font-size:11px;">*</span>
+                  <input id="t2JobRole" type="text" list="job-roles" placeholder="Ex : Développeur back-end…" autocomplete="off" required>
+                  <datalist id="job-roles">
+                    <option value="Développeur Back-End">
+                    <option value="Développeur Front-End">
+                    <option value="Développeur Full-Stack">
+                    <option value="Développeur Mobile iOS / Android">
+                    <option value="Data Engineer / Data Scientist">
+                    <option value="Ingénieur Machine Learning / IA">
+                    <option value="DevOps / SRE / Cloud Engineer">
+                    <option value="Architecte logiciel">
+                    <option value="CTO / Tech Lead">
+                    <option value="Product Manager Technique">
+                    <option value="Ingénieur Cybersécurité">
+                    <option value="Ingénieur Blockchain / Web3">
+                    <option value="QA / Test Engineer">
+                    <option value="Étudiant en Informatique">
+                    <option value="Chercheur académique">
+                    <option value="Consultant IT">
+                  </datalist>
+                </label>
+                <label>Niveau d'expérience <span class="optional">facultatif</span>
+                  <input id="t2ExpLevel" type="text" list="experience-levels" placeholder="Ex : Confirmé 3-5 ans" autocomplete="off">
+                  <datalist id="experience-levels">
+                    <option value="Étudiant / débutant 0-1 an">
+                    <option value="Junior 1-2 ans">
+                    <option value="Confirmé 3-5 ans">
+                    <option value="Senior 6-10 ans">
+                    <option value="Expert 10 ans et plus">
+                    <option value="Lead technique">
+                    <option value="Manager / Directeur technique">
+                  </datalist>
+                </label>
+              </div>
+
+              <div class="ticket-section">
+                <p class="ticket-section-label">Objectifs avec Finder AI <em>Choisissez au moins une priorité</em></p>
+                <div class="choice-grid" id="goalsGrid">
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="goals" value="discover">
+                    <span>Découvrir les outils adaptés</span>
+                    <small>Comparer rapidement les références IA du marché.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="goals" value="evaluate">
+                    <span>Évaluer avant d'adopter</span>
+                    <small>Vérifier la pertinence, le coût et l'intégration.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="goals" value="build">
+                    <span>Accélérer la livraison</span>
+                    <small>Trouver des références IA pour coder, tester et documenter.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="goals" value="watch">
+                    <span>Assurer une veille IA</span>
+                    <small>Suivre les nouvelles références pour votre équipe.</small>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════ TICKET 3 — Sources & Stack Technique ═══════ -->
+          <section class="signup-ticket" id="ticket-2" data-ticket="2">
+            <div class="ticket-header">
+              <div class="ticket-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              </div>
+              <div class="ticket-meta">
+                <p class="ticket-label">Étape 3 sur 4 — Sources &amp; Stack</p>
+                <h2 class="ticket-title">Calibrons votre veille IA</h2>
+                <p class="ticket-desc">Indiquez vos critères pour mieux orienter les sources et les recommandations.</p>
+              </div>
+            </div>
+
+            <div class="ticket-form">
+              <div class="ticket-section">
+                <p class="ticket-section-label">Sources préférées <em>Une ou plusieurs réponses</em></p>
+                <div class="choice-grid cols-3" id="sourcesGrid">
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="official_docs">
+                    <span>Documentation officielle</span>
+                    <small>Référence primaire, fiable et précise.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="technical_articles">
+                    <span>Articles &amp; Blogs techniques</span>
+                    <small>Retours d'expérience et tutoriels pratiques.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="community">
+                    <span>Communautés développeurs</span>
+                    <small>StackOverflow, GitHub, Reddit.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="benchmarks">
+                    <span>Benchmarks &amp; Comparatifs</span>
+                    <small>Chiffres objectifs, performance et coût.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="research_papers">
+                    <span>Publications scientifiques</span>
+                    <small>Études, thèses et conférences académiques.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="checkbox" data-group="research_sources" value="video_tutorials">
+                    <span>Vidéos &amp; Conférences</span>
+                    <small>YouTube, talks et webinaires tech.</small>
+                  </label>
+                </div>
+              </div>
+
+              <div class="ticket-section">
+                <p class="ticket-section-label">Environnement technique <em>facultatif</em></p>
+                <div class="chip-group" id="stackGroup">
+                  <label><input type="checkbox" data-group="technology_stack" value="python"><span>Python</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="javascript"><span>JavaScript / TypeScript</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="java"><span>Java / Kotlin</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="dotnet"><span>.NET / C#</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="go"><span>Go</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="rust"><span>Rust</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="php"><span>PHP / Laravel</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="cloud"><span>Cloud / DevOps</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="data"><span>Data / ML / AI</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="blockchain"><span>Blockchain / Web3</span></label>
+                  <label><input type="checkbox" data-group="technology_stack" value="embedded"><span>Embedded / IoT</span></label>
+                </div>
+              </div>
+
+              <div class="ticket-section">
+                <p class="ticket-section-label">Préférence de budget <em>Choisissez une option</em></p>
+                <div class="choice-grid" id="budgetGrid">
+                  <label class="choice-card">
+                    <input type="radio" data-group="budget_preference" name="budget_ui" value="free" required>
+                    <span>Gratuit / Open source</span>
+                    <small>Priorité aux solutions accessibles.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="budget_preference" name="budget_ui" value="freemium">
+                    <span>Freemium</span>
+                    <small>Tester avant d'investir.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="budget_preference" name="budget_ui" value="paid">
+                    <span>Payant justifié</span>
+                    <small>Priorité au gain de temps et à la qualité.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="budget_preference" name="budget_ui" value="enterprise">
+                    <span>Entreprise / SLA</span>
+                    <small>Contrat, support dédié et conformité.</small>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════ TICKET 4 — Préférences de Résultats ═══════ -->
+          <section class="signup-ticket" id="ticket-3" data-ticket="3">
+            <div class="ticket-header">
+              <div class="ticket-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              </div>
+              <div class="ticket-meta">
+                <p class="ticket-label">Étape 4 sur 4 — Préférences</p>
+                <h2 class="ticket-title">Choisissez votre restitution</h2>
+                <p class="ticket-desc">Définissez le niveau de détail qui vous aide à décider avec confiance.</p>
+              </div>
+            </div>
+
+            <div class="ticket-form">
+              <div class="ticket-section">
+                <p class="ticket-section-label">Comment recevoir les références IA ?</p>
+                <div class="choice-grid" id="styleGrid">
+                  <label class="choice-card">
+                    <input type="radio" data-group="result_style" name="result_style_ui" value="decision">
+                    <span>Décision rapide</span>
+                    <small>La meilleure référence, les critères essentiels et un lien source.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="result_style" name="result_style_ui" value="balanced" checked>
+                    <span>Vue équilibrée</span>
+                    <small>Une synthèse claire avec plusieurs références classées.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="result_style" name="result_style_ui" value="detailed">
+                    <span>Analyse détaillée</span>
+                    <small>Contexte, sources, limites et éléments de comparaison.</small>
+                  </label>
+                  <label class="choice-card">
+                    <input type="radio" data-group="result_style" name="result_style_ui" value="expert">
+                    <span>Mode Expert</span>
+                    <small>Métriques techniques et accès aux sources primaires.</small>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label>Langue de réponse préférée
+                  <input id="t4Lang" type="text" list="languages" placeholder="Ex : Français" autocomplete="off">
+                  <datalist id="languages">
+                    <option value="Français">
+                    <option value="English">
+                    <option value="Français et English">
+                    <option value="Arabe">
+                    <option value="Espagnol">
+                    <option value="Allemand">
+                    <option value="Italien">
+                    <option value="Portugais">
+                  </datalist>
+                </label>
+                <label>Rythme de veille IA
+                  <input id="t4Freq" type="text" list="frequencies" placeholder="Ex : À la demande" autocomplete="off">
+                  <datalist id="frequencies">
+                    <option value="À la demande">
+                    <option value="Résumé quotidien">
+                    <option value="Résumé hebdomadaire">
+                    <option value="Résumé mensuel">
+                    <option value="Alertes en temps réel">
+                  </datalist>
+                </label>
+              </div>
+
+              <div class="privacy-note">
+                <span class="check-icon" aria-hidden="true">&#10003;</span>
+                <p>Vos préférences sont modifiables à tout moment dans les Paramètres. Elles servent uniquement à personnaliser vos références IA.</p>
+              </div>
+            </div>
+          </section>
+
+        </div><!-- /ticket-viewport -->
+      </div><!-- /signup-modal-body -->
+
+      <!-- ── MODAL FOOTER ── -->
+      <div class="signup-modal-footer">
+        <!-- Step dots -->
+        <div class="modal-step-indicator" aria-label="Progression" role="list">
+          <span class="modal-step-dot is-active" data-dot="0" role="listitem"></span>
+          <span class="modal-step-dot" data-dot="1" role="listitem"></span>
+          <span class="modal-step-dot" data-dot="2" role="listitem"></span>
+          <span class="modal-step-dot" data-dot="3" role="listitem"></span>
+        </div>
+        <!-- Navigation -->
+        <div class="modal-nav">
+          <button type="button" class="modal-back-btn" id="modalBackBtn" hidden>
+            &#8592; Retour
+          </button>
+          <button type="button" class="modal-next-btn" id="modalNextBtn">
+            Continuer
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button type="button" class="modal-submit-btn" id="modalSubmitBtn" hidden>
+            Créer mon espace
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /signup-modal -->
+  </div><!-- /signup-modal-overlay -->
+
+  <script src="{% static 'js/auth.js' %}?v=7" defer></script>
+</body>
+</html>

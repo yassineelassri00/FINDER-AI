@@ -1,0 +1,44 @@
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Environnements virtuels ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Secrets — JAMAIS de commit ────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Bases de données locales ──────────────────────────────────────────────
+*.sqlite3
+*.db
+db.sqlite3*
+
+# ─── Fichiers téléversés en local ─────────────────────────────────────────
+media/
+
+# ─── Django ────────────────────────────────────────────────────────────────
+staticfiles/
+*.log
+
+# ─── Éditeurs / OS ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,934 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08111d">
+  <meta name="description" content="Finder AI — Trouvez les meilleures références IA par mots-clés adaptées à votre environnement technique.">
+  <title>Finder AI — Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20">
+</head>
+<body>
+<div class="app-frame" id="appFrame">
+  <div class="app-layout" id="appLayout">
+
+    <!-- ═══════════════════════════════════════
+         SIDEBAR
+    ═══════════════════════════════════════ -->
+    <aside class="sidebar" aria-label="Navigation principale">
+
+      <!-- Sidebar Top: logo + history -->
+      <div class="sidebar-top">
+        <div class="sidebar-brand">
+          <span class="brand-name">Finder <span class="brand-accent">AI</span></span>
+        </div>
+        <div class="history-btns">
+          <button class="plain-icon" type="button" id="historyBackButton" aria-label="Recherche précédente" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h11"/></svg>
+          </button>
+          <button class="plain-icon" type="button" id="historyForwardButton" aria-label="Recherche suivante" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5 7 7-7 7M17 12H6"/></svg>
+          </button>
+          <button class="plain-icon" type="button" id="menuButton" aria-label="Réduire la barre latérale" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Nav links -->
+      <nav class="sidebar-nav" aria-label="Navigation principale">
+        <button type="button" class="sidebar-link" id="newSearchButton" title="Nouvelle recherche (Ctrl+K)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Nouvelle recherche</span>
+        </button>
+        <button type="button" class="sidebar-link" id="projectsButton" title="Bibliothèque de projets">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>Projets</span>
+        </button>
+        <button type="button" class="sidebar-link" id="toolsButton" title="Explorer le catalogue">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+          <span>Explorer</span>
+        </button>
+        <button type="button" class="sidebar-link" id="proposeToolButton" title="Proposer une référence IA">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span>Proposer un outil</span>
+        </button>
+      </nav>
+
+      <!-- Recents -->
+      <section class="sidebar-recents" aria-labelledby="sidebarRecentsTitle">
+        <div class="sidebar-section-head">
+          <h2 id="sidebarRecentsTitle">Récents</h2>
+          <button type="button" class="plain-icon" id="manageRecentsButton" aria-label="Gérer les recherches récentes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v5M6 15v5M18 4v8M18 18v2M3 9h6M15 12h6M3 15h6M15 18h6"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="15" r="3"/></svg>
+          </button>
+        </div>
+        <div class="sidebar-recent-list" id="sidebarRecentList">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <button type="button" class="upgrade-button" id="upgradeButton">
+          <span class="progress-ring" aria-hidden="true"></span>
+          <span>Finder Plus</span>
+          <small id="usageCount">0/3</small>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <div class="sidebar-footer-actions">
+          <button type="button" class="footer-icon-btn" id="openSettingsSidebarBtn" aria-label="Paramètres" title="Paramètres">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+            </svg>
+          </button>
+          <button type="button" class="footer-profile-btn" id="profileMenuBtn" aria-label="Menu du compte" aria-expanded="false" aria-haspopup="dialog">
+            <span class="user-avatar-sm">{{ request.user.username|slice:':1'|upper }}</span>
+            <span class="footer-profile-name">{{ profile.full_name|default:request.user.username }}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:13px;height:13px;flex:none;margin-left:auto;color:var(--text-muted)"><path d="m7 10 5 5 5-5"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Profile Mini-Modal -->
+      <div id="profileMiniModal" class="profile-mini-modal" hidden role="dialog" aria-label="Menu du compte" aria-modal="true">
+        <div class="pmm-header">
+          <span class="pmm-avatar">{{ request.user.username|slice:':1'|upper }}</span>
+          <div class="pmm-info">
+            <strong>{{ profile.full_name|default:request.user.username }}</strong>
+            <small>{{ request.user.email }}</small>
+          </div>
+        </div>
+        <div class="pmm-divider"></div>
+        <button type="button" class="pmm-item" id="pmm-settings-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          Paramètres
+        </button>
+        <div class="pmm-divider"></div>
+        <form method="post" action="{% url 'logout' %}" id="pmmLogoutForm">
+          {% csrf_token %}
+          <button type="submit" class="pmm-item pmm-item--danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Se déconnecter
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════
+         MAIN WORKSPACE
+    ═══════════════════════════════════════ -->
+    <main class="workspace">
+      <!-- Top bar -->
+      <header class="workspace-header">
+        <div class="workspace-header-left">
+          <button type="button" class="plain-icon workspace-toggle-button" id="sidebarToggleButton" aria-label="Afficher ou masquer la barre latérale" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="breadcrumb">
+            <strong>Finder AI</strong>
+            <span aria-hidden="true">/</span>
+            <strong>Workspace</strong>
+          </div>
+        </div>
+        <div class="workspace-actions">
+          <button type="button" class="plain-icon" id="topSearchButton" aria-label="Focus sur la recherche" title="Focus (Ctrl+K)" style="width:32px;height:32px;">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.5 4.5"/></svg>
+          </button>
+          <button class="plain-icon" type="button" id="splitViewButton" aria-label="Masquer le panneau" aria-pressed="false" style="width:32px;height:32px;color:var(--accent);">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M10 4v16"/></svg>
+          </button>
+          <button type="button" class="plain-icon" id="pinProjectButton" aria-label="Épingler" aria-pressed="false" style="width:32px;height:32px;">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-3.2 1.1-3.5 3.5-1.1 3.2-4.9-4.9 3.2-1.1L14 7.2 15 4Z"/><path d="m9.2 14.8-4.7 4.7"/></svg>
+          </button>
+          <button type="button" class="plain-icon" id="projectActionsButton" aria-label="Plus d'actions" aria-expanded="false" style="width:32px;height:32px;">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable content -->
+      <div class="workspace-scroll" id="workspaceScroll">
+
+        <!-- Hero + Composer -->
+        <section class="home-content workspace-home" aria-labelledby="pageTitle">
+          <div class="workspace-intro">
+            <h1 id="pageTitle" class="ai-greeting">
+              <span id="dynamicGreetingPrefix">À vous la parole,</span> <span class="greeting-suffix" id="userNameDisplay">{{ profile.full_name|default:request.user.username }}</span>
+            </h1>
+          </div>
+
+          <form id="searchForm" class="message-composer finder-composer" role="search" autocomplete="off">
+            {% csrf_token %}
+            <label for="searchInput" class="visually-hidden">Écrire une recherche par mots-clés</label>
+            <textarea id="searchInput" class="composer-textarea" rows="1" placeholder="Ex: assistant IA pour tests API, veille juridique, design UI, automatisation CRM..."></textarea>
+
+            <!-- Files context bar (inline, below textarea) -->
+            <div class="context-files-bar" id="contextFilesBar" style="padding:0 16px 0;">
+              <div class="context-files-chips" id="contextFilesChips">
+                <span class="context-files-empty" id="contextFilesEmpty">Aucun fichier de contexte</span>
+              </div>
+              <button type="button" class="context-add-btn" id="contextAddBtn">
+                <svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M12 5v14M5 12h14"/></svg>
+                Fichier contexte
+              </button>
+            </div>
+
+            <div class="composer-footer">
+              <div class="composer-left">
+                <button type="button" class="composer-action" id="attachButton" aria-label="Joindre un fichier" title="Joindre un fichier">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <input id="fileInput" class="visually-hidden" type="file" accept="*/*">
+                <div class="composer-attach-area" id="composerAttachArea"></div>
+              </div>
+              <div class="composer-right">
+                <button type="button" class="model-switch" id="modelButton" aria-label="Choisir le mode d'analyse">
+                  Finder&nbsp;<b>AI</b>&nbsp;<span id="modelLabel">Extra</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                </button>
+                <button type="button" class="composer-action" id="voiceButton" aria-label="Saisie vocale" title="Saisie vocale">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" id="voiceIcon"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg>
+                </button>
+                <button class="send-button" type="submit" id="sendButton" aria-label="Lancer la recherche" title="Envoyer (Entrée)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4.2 14-3-5.2L5 12Z"/><path d="m11.8 13.8 3-3"/></svg>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Historique des mots-clés de la session -->
+          <div class="session-history-container" id="sessionHistoryContainer">
+            <span class="session-history-label">Session active :</span>
+            <div class="session-history-chips" id="sessionKeywordChips">
+              <span class="session-history-empty" id="sessionHistoryEmpty">Aucun mot-clé recherché dans cette session</span>
+            </div>
+            <button type="button" class="session-clear-btn" id="clearSessionKeywordsBtn" title="Réinitialiser la session">
+              <svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>Nouveau</span>
+            </button>
+          </div>
+
+          <div class="hidden-legacy-elements" style="display: none !important;">
+            <!-- Quick suggestions -->
+            <div class="quick-suggestions research-prompts" id="quickSuggestions">
+              <button type="button" class="suggestion-pill intent-card" data-query="outil IA pour générer du code automatiquement">
+                <span>Code</span>
+                <strong>Génération & review</strong>
+              </button>
+              <button type="button" class="suggestion-pill intent-card" data-query="outil IA pour analyse et visualisation de données">
+                <span>Data</span>
+                <strong>Analyse & visualisation</strong>
+              </button>
+              <button type="button" class="suggestion-pill intent-card" data-query="assistant IA pour rédaction et intégration API">
+                <span>API</span>
+                <strong>Rédaction technique</strong>
+              </button>
+              <button type="button" class="suggestion-pill intent-card" data-query="outil IA pour création visuelle et design UI">
+                <span>Design</span>
+                <strong>Interface & création</strong>
+              </button>
+              <button type="button" class="suggestion-pill intent-card" data-query="agent IA autonome pour automatisation de tâches">
+                <span>Agents</span>
+                <strong>Automatisation</strong>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Content below composer (hidden) -->
+        <div class="content-area" style="display: none !important;">
+
+          <!-- Recherches récentes -->
+          <section class="recent-searches" aria-labelledby="recentTitle">
+            <div class="content-section-head">
+              <h2 id="recentTitle">Récents</h2>
+              <button id="openPanelButton" type="button" class="show-result">Afficher le résultat</button>
+            </div>
+            <div id="recentList" class="central-recent-list">
+              <!-- Populated by JS from localStorage -->
+            </div>
+          </section>
+
+          <!-- Filtres -->
+          <div class="filters-bar" id="filtersBar">
+            <div class="filter-row">
+              <span class="filter-label">Catégorie :</span>
+              <div class="filter-pills" id="categoryPills">
+                <button type="button" class="filter-pill is-active" data-cat="all">Toutes</button>
+                {% for cat in categories %}
+                <button type="button" class="filter-pill" data-cat="{{ cat.slug }}">{{ cat.nom }}</button>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">Tags :</span>
+              <div class="filter-pills" id="tagPills">
+                <button type="button" class="filter-pill is-active" data-tag="all">Tous</button>
+                {% for tag in tags %}
+                <button type="button" class="filter-pill" data-tag="{{ tag.slug }}">{{ tag.nom }}</button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Catalogue d'outils -->
+          <section class="catalog-section" aria-labelledby="catalogTitle">
+            <div class="content-section-head">
+              <h2 id="catalogTitle">Références IA recommandées</h2>
+              <span id="toolsCountLabel">{{ outils|length }} référence{{ outils|length|pluralize }}</span>
+            </div>
+            <div class="tool-list" id="toolsList">
+              {% for outil in outils %}
+              <button type="button" class="tool-result"
+                data-name="{{ outil.nom }}"
+                data-description="{{ outil.description }}"
+                data-category="{{ outil.categorie.nom|default:'Outil IA' }}"
+                data-price="{{ outil.type_tarification }}"
+                data-url="{{ outil.url_site }}"
+                data-id="{{ outil.id }}"
+                data-search="{{ outil.nom|lower }} {{ outil.description|lower }} {% for tag in outil.tags.all %}{{ tag.nom|lower }} {% endfor %}{{ outil.categorie.nom|default:''|lower }} {{ outil.type_integration|lower }}">
+                <span class="tool-letter">{{ outil.nom|slice:':1'|upper }}</span>
+                <span>
+                  <strong>{{ outil.nom }}</strong>
+                  <small>{{ outil.categorie.nom|default:'Outil IA' }} · {{ outil.type_tarification }}</small>
+                </span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+              {% empty %}
+              <p class="no-tools">Les résultats de votre recherche apparaîtront ici.</p>
+              {% endfor %}
+            </div>
+            <!-- Pagination -->
+            <div class="pagination-bar" id="paginationBar" hidden>
+              <button type="button" class="pagination-btn" id="prevPageBtn" disabled>← Précédent</button>
+              <span class="pagination-info" id="paginationInfo">Page 1</span>
+              <button type="button" class="pagination-btn" id="nextPageBtn">Suivant →</button>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════
+         RESIZE HANDLE
+    ═══════════════════════════════════════ -->
+    <div class="resize-handle" id="resizeHandle" role="separator" aria-label="Redimensionner" aria-orientation="vertical" tabindex="0">
+      <div class="resize-handle-inner"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         RESULT PANEL
+    ═══════════════════════════════════════ -->
+    <aside id="resultPanel" class="result-panel" aria-labelledby="resultPanelTitle" aria-hidden="false">
+      <header class="result-panel-header">
+        <div class="rp-header-left">
+          <!-- Session Search Keyword Tabs -->
+          <div class="keyword-tabs" id="keywordTabsList" role="tablist">
+            <!-- Dynamically populated with chips per keyword by JS -->
+          </div>
+        </div>
+        <div class="panel-header-actions">
+          <button type="button" class="header-icon" id="toggleFavoriBtn" title="Favoris" aria-label="Favoris">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </button>
+          <button type="button" class="header-icon" id="copyResultButton" title="Copier" aria-label="Copier">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>
+          </button>
+          <button type="button" class="header-icon download-pdf-button" id="downloadResultButton" title="Télécharger PDF" aria-label="PDF">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>
+            <span>PDF</span>
+          </button>
+          <button type="button" class="header-icon close-panel" id="closePanelButton" title="Fermer" aria-label="Fermer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="panel-scroll">
+        <!-- Empty State (initially visible if no tabs) -->
+        <div class="unified-empty-state" id="unifiedEmptyState">
+          <div class="empty-state-icon">🔍</div>
+          <h3>En attente d'une recherche</h3>
+          <p>Saisissez un mot-clé dans la barre de recherche pour lancer l'analyse sémantique et obtenir les recommandations.</p>
+        </div>
+
+        <!-- Unified Result View (rendered dynamically or shown when tab is selected) -->
+        <div class="unified-result-content" id="unifiedResultContent" style="display: none;">
+          
+          <!-- Hero Section (Title + Facts) -->
+          <div class="rp-result-hero">
+            <div class="rp-hero-meta">
+              <span class="verified-dot"></span>
+              <span id="resultQuery">RECOMMANDATION</span>
+              <time id="resultDate" class="rp-date">À l'instant</time>
+            </div>
+            <div class="rp-hero-title">
+              <span id="resultLogo" class="result-logo">F</span>
+              <div class="rp-hero-text">
+                <h2 id="resultPanelTitle">Finder AI</h2>
+              </div>
+            </div>
+            
+            <div class="rp-facts">
+              <div class="rp-fact">
+                <span>PERTINENCE</span>
+                <strong id="resultPrice">À évaluer</strong>
+              </div>
+              <div class="rp-fact">
+                <span>SOURCES</span>
+                <strong id="researchResultCount">—</strong>
+              </div>
+              <div class="rp-fact">
+                <span>MODE</span>
+                <strong id="resultCategory">Recherche Web</strong>
+              </div>
+            </div>
+            
+            <a id="resultLink" class="rp-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display: none;">
+              Ouvrir la meilleure source
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;"><path d="m9 18 6-6-6-6"/></svg>
+            </a>
+          </div>
+
+          <!-- Section: Synthesis -->
+          <div class="unified-section synthesis-section">
+            <div class="section-title-row">
+              <svg class="section-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <h3>Synthèse de l'analyse</h3>
+            </div>
+            <p id="resultDescription" class="synthesis-text">Analyse sémantique en cours...</p>
+          </div>
+
+          <!-- Section: Key Points -->
+          <div class="unified-section keypoints-section">
+            <div class="section-title-row">
+              <svg class="section-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              <h3>Lecture recommandée</h3>
+            </div>
+            <ul id="reasonList" class="rp-reason-list">
+              <li><span class="rp-reason-num">01</span>La synthèse apparaîtra ici après votre première recherche.</li>
+            </ul>
+          </div>
+
+          <!-- Section: Tools / Sources -->
+          <div class="unified-section sources-section">
+            <div class="section-title-row">
+              <svg class="section-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <h3>Références recommandées</h3>
+            </div>
+            <div id="researchResults" class="research-results-list" aria-live="polite">
+              <p class="result-empty">Lancez une recherche pour afficher les sources.</p>
+            </div>
+          </div>
+
+          <!-- Legacy / Hidden elements required by existing JS scripts -->
+          <div style="display: none !important;">
+            <div class="panel-tabs">
+              <button type="button" class="panel-tab is-active" data-panel="analyse" id="tabAnalyse">Analyse</button>
+              <button type="button" class="panel-tab" data-panel="sources" id="tabSources">Sources</button>
+              <button type="button" class="panel-tab" data-panel="avis" id="tabAvis">Avis</button>
+              <button type="button" class="panel-tab" data-panel="memoire" id="tabMemoire">Mémoire</button>
+            </div>
+            <div class="panel-pane is-active" id="paneAnalyse"></div>
+            <div class="panel-pane" id="paneSources"></div>
+            <div class="panel-pane" id="paneAvis"><div id="reviewsList"></div><span id="resultRatingBadge"></span><button id="openReviewModalBtn"></button></div>
+            <div class="panel-pane" id="paneMemoire"><div id="contextFilesSummary"></div></div>
+          </div>
+
+          <!-- Export Block -->
+          <div class="rp-export">
+            <div class="rp-export-info">
+              <p>RAPPORT À PARTAGER</p>
+              <h3>Exporter l'analyse</h3>
+            </div>
+            <button type="button" id="downloadPdfCta" class="rp-export-btn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>
+              PDF
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     POPOVERS & OVERLAYS
+═══════════════════════════════════════ -->
+
+<!-- Action menu (projet) -->
+<div id="projectActionMenu" class="action-popover" role="menu" aria-label="Actions du projet" hidden>
+  <button type="button" id="actionNewSearchButton" role="menuitem">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    Nouvelle recherche
+  </button>
+  <button type="button" id="actionCopyProjectButton" role="menuitem">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>
+    Copier le lien
+  </button>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- ═══════════════════════════════════════
+     DIALOG : Bibliothèque de projets
+═══════════════════════════════════════ -->
+<dialog id="projectsLibrary" class="full-overlay-dialog" aria-labelledby="projectsTitle">
+  <div class="dialog-container">
+    <header class="dialog-header">
+      <div>
+        <p class="eyebrow">ESPACE DE TRAVAIL</p>
+        <h2 id="projectsTitle">Bibliothèque de projets</h2>
+      </div>
+      <button type="button" class="close-overlay" aria-label="Fermer" id="closeProjectsBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="dialog-content">
+      <div class="projects-grid" id="projectsGrid">
+        <button type="button" class="project-card new-project-card" id="newProjectBtn">
+          <div class="project-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <strong>Nouveau projet</strong>
+          <small>Regroupez vos recherches</small>
+        </button>
+        <!-- Projects populated by JS -->
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- ═══════════════════════════════════════
+     DIALOG : Paramètres (Full Settings Overlay)
+═══════════════════════════════════════ -->
+<dialog id="settingsDialog" class="antigravity-modal-dialog settings-console" aria-labelledby="settingsTitle">
+  <div class="antigravity-modal-layout">
+    <aside class="antigravity-sidebar">
+      <div class="antigravity-brand-tag">
+        <span class="settings-brand-dot" aria-hidden="true"></span>
+        <span>Finder AI</span>
+      </div>
+      <nav class="antigravity-nav">
+        <button type="button" class="settings-tab is-active" data-settings-tab="compte">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          <span>Profil</span>
+        </button>
+        <button type="button" class="settings-tab" data-settings-tab="recherche">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+          <span>Recherche IA</span>
+        </button>
+        <button type="button" class="settings-tab" data-settings-tab="sources">
+          <svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2.5Z"/><path d="M8 7h7M8 11h8"/></svg>
+          <span>Sources</span>
+        </button>
+        <button type="button" class="settings-tab" data-settings-tab="apparence">
+          <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18 3 3 0 0 0 0-6h-1a2 2 0 0 1 0-4h2a4 4 0 0 0 0-8Z"/><circle cx="7.5" cy="10" r=".8"/><circle cx="10" cy="7" r=".8"/><circle cx="15.5" cy="7.5" r=".8"/></svg>
+          <span>Interface</span>
+        </button>
+        <button type="button" class="settings-tab" data-settings-tab="general">
+          <svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg>
+          <span>Données</span>
+        </button>
+      </nav>
+    </aside>
+
+    <div class="antigravity-content">
+      <header class="antigravity-header settings-console-header">
+        <div>
+          <p>PARAMÈTRES ACTIFS</p>
+          <h3 id="settingsTitle">Adapter Finder AI à vos recherches</h3>
+        </div>
+        <button type="button" class="close-settings" id="closeSettingsBtn" aria-label="Fermer la modale">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+
+      <div class="settings-scroll-area">
+        <div class="settings-pane is-active" id="pane-compte">
+          <form id="settingsProfileForm">
+            {% csrf_token %}
+          <div class="pane-intro">
+            <h2>Profil de recommandation</h2>
+            <p>Ces informations sont sauvegardées en base et enrichissent les synthèses générées par Finder AI.</p>
+          </div>
+
+          <div class="settings-grid">
+            <label>Nom complet
+              <input type="text" name="full_name" value="{{ profile.full_name|default:'' }}" placeholder="Votre nom complet">
+            </label>
+            <label>Organisation
+              <input type="text" name="organization" value="{{ profile.organization|default:'' }}" placeholder="Equipe, stage, projet...">
+            </label>
+            <label>Rôle principal
+              <select name="job_role" class="antigravity-select">
+                <option value="frontend" {% if profile.job_role == 'frontend' %}selected{% endif %}>Développeur Frontend</option>
+                <option value="backend" {% if profile.job_role == 'backend' %}selected{% endif %}>Développeur Backend</option>
+                <option value="fullstack" {% if profile.job_role == 'fullstack' or not profile.job_role %}selected{% endif %}>Développeur Fullstack</option>
+                <option value="ai_engineer" {% if profile.job_role == 'ai_engineer' %}selected{% endif %}>Ingénieur IA / ML</option>
+                <option value="product" {% if profile.job_role == 'product' %}selected{% endif %}>Product / Recherche</option>
+              </select>
+            </label>
+            <label>Langue des réponses
+              <select name="preferred_language" class="antigravity-select">
+                <option value="fr" {% if profile.preferred_language == 'fr' or not profile.preferred_language %}selected{% endif %}>Français</option>
+                <option value="en" {% if profile.preferred_language == 'en' %}selected{% endif %}>English</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="settings-wide-label">Contexte professionnel
+            <textarea class="antigravity-textarea" name="professional_context" rows="4" placeholder="Ex: application Django qui recommande des outils IA à partir de mots-clés techniques...">{{ profile.professional_context|default:'' }}</textarea>
+          </label>
+
+          <div class="settings-save-row">
+            <button type="submit" class="antigravity-btn-primary">Enregistrer le profil</button>
+            <span id="settingsSaveStatus" class="settings-save-status" aria-live="polite"></span>
+          </div>
+          </form>
+        </div>
+
+        <div class="settings-pane" id="pane-recherche">
+          <div class="pane-intro">
+            <h2>Recherche IA</h2>
+            <p>Ces réglages sont envoyés au moteur de recherche et modifient le classement, la synthèse et le nombre de références.</p>
+          </div>
+
+          <div class="settings-grid">
+            <label>Style de résultat
+              <select id="prefResultStyle" class="antigravity-select">
+                <option value="decision" {% if profile.result_style == 'decision' %}selected{% endif %}>Décision rapide</option>
+                <option value="balanced" {% if profile.result_style == 'balanced' or not profile.result_style %}selected{% endif %}>Vue équilibrée</option>
+                <option value="detailed" {% if profile.result_style == 'detailed' %}selected{% endif %}>Analyse détaillée</option>
+              </select>
+            </label>
+            <label>Budget prioritaire
+              <select id="prefDefaultPricing" class="antigravity-select">
+                <option value="all" {% if not profile.budget_preference or profile.budget_preference == 'all' %}selected{% endif %}>Tous les modèles</option>
+                <option value="Gratuit" {% if profile.budget_preference == 'Gratuit' %}selected{% endif %}>Gratuit</option>
+                <option value="Freemium" {% if profile.budget_preference == 'Freemium' %}selected{% endif %}>Freemium</option>
+                <option value="Payant" {% if profile.budget_preference == 'Payant' %}selected{% endif %}>Payant</option>
+                <option value="Open-source" {% if profile.budget_preference == 'Open-source' or profile.budget_preference == 'Open-Source' %}selected{% endif %}>Open-source</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="card-head">
+              <h4>Objectifs favoris</h4>
+              <p>Ils sont ajoutés au contexte de recommandation pour mieux interpréter vos mots-clés.</p>
+            </div>
+            <div class="antigravity-pills-group" id="prefCategoriesPills">
+              <button type="button" class="antigravity-pill {% if 'code' in profile.goals %}is-selected{% endif %}" data-val="code">Code</button>
+              <button type="button" class="antigravity-pill {% if 'data' in profile.goals %}is-selected{% endif %}" data-val="data">Data</button>
+              <button type="button" class="antigravity-pill {% if 'automation' in profile.goals %}is-selected{% endif %}" data-val="automation">Automatisation</button>
+              <button type="button" class="antigravity-pill {% if 'research' in profile.goals %}is-selected{% endif %}" data-val="research">Recherche</button>
+              <button type="button" class="antigravity-pill {% if 'design' in profile.goals %}is-selected{% endif %}" data-val="design">Design UI</button>
+            </div>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="range-labels">
+              <span>3 références</span>
+              <strong id="resultsCountLabel">{{ profile.search_preferences.max_results|default:8 }}</strong>
+              <span>20 références</span>
+            </div>
+            <input type="range" class="range-slider" id="maxResultsRange" min="3" max="20" value="{{ profile.search_preferences.max_results|default:8 }}">
+          </div>
+
+          <div class="settings-save-row">
+            <button type="button" class="antigravity-btn-primary" id="saveSearchPrefsBtn">Appliquer à la recherche</button>
+            <span id="searchPrefsSaveStatus" class="settings-save-status" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <div class="settings-pane" id="pane-sources">
+          <div class="pane-intro">
+            <h2>Sources & preuves</h2>
+            <p>Le choix des sources impacte le mode de recherche et les informations envoyées au panneau de synthèse.</p>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="card-head">
+              <h4>Mode de recherche</h4>
+              <p>Catalogue seul pour aller vite, hybride pour équilibrer, web prioritaire pour une veille plus large.</p>
+            </div>
+            <div class="antigravity-segmented" id="sourceModeSegmented">
+              <button type="button" class="segmented-btn" data-val="catalog">Catalogue</button>
+              <button type="button" class="segmented-btn is-active" data-val="hybrid">Hybride</button>
+              <button type="button" class="segmented-btn" data-val="web">Web</button>
+            </div>
+          </div>
+
+          <div class="settings-toggle-list">
+            <label class="antigravity-checkbox">
+              <input type="checkbox" id="includeWebToggle" checked>
+              <span>Inclure la recherche web quand elle est disponible</span>
+            </label>
+            <label class="antigravity-checkbox">
+              <input type="checkbox" id="sourceTransparencyToggle" checked>
+              <span>Afficher les indices de pertinence et les sources dans la synthèse</span>
+            </label>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="card-head">
+              <h4>Types de sources</h4>
+              <p>Ces choix sont sauvegardés dans votre profil et accompagnent les requêtes.</p>
+            </div>
+            <div class="antigravity-pills-group" id="researchSourcesPills">
+              <button type="button" class="antigravity-pill {% if 'official_docs' in profile.research_sources %}is-selected{% endif %}" data-val="official_docs">Docs officielles</button>
+              <button type="button" class="antigravity-pill {% if 'comparisons' in profile.research_sources %}is-selected{% endif %}" data-val="comparisons">Comparatifs</button>
+              <button type="button" class="antigravity-pill {% if 'github' in profile.research_sources %}is-selected{% endif %}" data-val="github">GitHub</button>
+              <button type="button" class="antigravity-pill {% if 'community' in profile.research_sources %}is-selected{% endif %}" data-val="community">Retours communauté</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-pane" id="pane-apparence">
+          <div class="pane-intro">
+            <h2>Interface</h2>
+            <p>Ces réglages sont appliqués immédiatement et conservés localement pour votre poste.</p>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="antigravity-segmented" id="themeSegmented">
+              <button type="button" class="segmented-btn is-active" data-val="dark">Bleu nuit</button>
+              <button type="button" class="segmented-btn" data-val="oled">OLED</button>
+            </div>
+          </div>
+          <div class="settings-control-block">
+            <div class="antigravity-segmented" id="viewModeSegmented">
+              <button type="button" class="segmented-btn is-active" data-val="list">Liste</button>
+              <button type="button" class="segmented-btn" data-val="grid">Grille</button>
+            </div>
+          </div>
+          <div class="settings-control-block">
+            <div class="antigravity-segmented" id="densitySegmented">
+              <button type="button" class="segmented-btn is-active" data-val="comfortable">Confortable</button>
+              <button type="button" class="segmented-btn" data-val="compact">Compact</button>
+            </div>
+          </div>
+          <div class="settings-control-block">
+            <div class="antigravity-segmented" id="fontSizeSegmented">
+              <button type="button" class="segmented-btn is-active" data-val="normal">Texte normal</button>
+              <button type="button" class="segmented-btn" data-val="large">Grand texte</button>
+              <button type="button" class="segmented-btn" data-val="xlarge">Très grand</button>
+            </div>
+          </div>
+          <div class="settings-control-block">
+            <div class="antigravity-segmented" id="motionSegmented">
+              <button type="button" class="segmented-btn is-active" data-val="off">Animations</button>
+              <button type="button" class="segmented-btn" data-val="on">Réduites</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-pane" id="pane-general">
+          <div class="pane-intro">
+            <h2>Données & intégrations</h2>
+            <p>Paramètres techniques reliés à votre espace utilisateur.</p>
+          </div>
+
+          <div class="settings-grid">
+            <label>Clé API Gemini optionnelle
+              <span class="settings-secret-field">
+                <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." value="{{ profile.gemini_api_key|default:'' }}">
+                <button type="button" class="key-toggle-btn" id="geminiKeyToggle" aria-label="Afficher ou masquer la clé">
+                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </span>
+            </label>
+            <label>Fréquence de veille
+              <select id="watchFrequencySelect" class="antigravity-select">
+                <option value="on_demand" {% if profile.watch_frequency == 'on_demand' or not profile.watch_frequency %}selected{% endif %}>À la demande</option>
+                <option value="daily" {% if profile.watch_frequency == 'daily' %}selected{% endif %}>Quotidienne</option>
+                <option value="weekly" {% if profile.watch_frequency == 'weekly' %}selected{% endif %}>Hebdomadaire</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="settings-control-block">
+            <div class="card-head">
+              <h4>Stack technique suivie</h4>
+              <p>Ces tags renforcent les recommandations compatibles avec votre environnement.</p>
+            </div>
+            <div class="antigravity-pills-group" id="techStackPills">
+              <button type="button" class="antigravity-pill {% if 'python' in profile.technology_stack %}is-selected{% endif %}" data-val="python">Python</button>
+              <button type="button" class="antigravity-pill {% if 'django' in profile.technology_stack %}is-selected{% endif %}" data-val="django">Django</button>
+              <button type="button" class="antigravity-pill {% if 'javascript' in profile.technology_stack %}is-selected{% endif %}" data-val="javascript">JavaScript</button>
+              <button type="button" class="antigravity-pill {% if 'api' in profile.technology_stack %}is-selected{% endif %}" data-val="api">API</button>
+              <button type="button" class="antigravity-pill {% if 'cloud' in profile.technology_stack %}is-selected{% endif %}" data-val="cloud">Cloud</button>
+            </div>
+          </div>
+
+          <div class="card-actions-row">
+            <button type="button" class="antigravity-btn-outline" id="exportDataBtn">Exporter mes données JSON</button>
+            <button type="button" class="antigravity-btn-danger" id="clearHistoryBtn">Effacer l'historique</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- ═══════════════════════════════════════
+     DIALOG : Finder Plus
+═══════════════════════════════════════ -->
+<dialog id="upgradeDialog" class="utility-dialog" aria-labelledby="upgradeTitle">
+  <div class="dialog-head">
+    <div>
+      <p>FINDER PLUS</p>
+      <h2 id="upgradeTitle">Activer les fonctionnalités avancées</h2>
+    </div>
+    <button type="button" class="close-btn" id="upgradeCloseButton" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <p class="upgrade-desc">Débloquez des recherches illimitées par mots-clés, l'analyse multi-fichiers et les exports PDF avancés.</p>
+  <div class="upgrade-features">
+    <div class="upgrade-feature"><div class="feat-icon">∞</div> Recherches par mots-clés illimitées</div>
+    <div class="upgrade-feature"><div class="feat-icon">📁</div> Analyse multi-fichiers de contexte</div>
+    <div class="upgrade-feature"><div class="feat-icon">📊</div> Exports PDF enrichis et historique illimité</div>
+    <div class="upgrade-feature"><div class="feat-icon">⚡</div> Accès prioritaire aux nouvelles références IA</div>
+  </div>
+  <div class="upgrade-code-section">
+    <div class="upgrade-code-label">Code d'activation</div>
+    <div class="upgrade-code-input">
+      <input type="text" id="upgradeCodeInput" placeholder="XXXX-XXXX-XXXX" maxlength="19" autocomplete="off">
+      <button type="button" id="upgradeActivateButton">Activer</button>
+    </div>
+    <div class="upgrade-status" id="upgradeStatus"></div>
+  </div>
+</dialog>
+
+<!-- ═══════════════════════════════════════
+     DIALOG : Publier un avis
+═══════════════════════════════════════ -->
+<dialog id="reviewDialog" class="utility-dialog" aria-labelledby="reviewTitle">
+  <form id="reviewForm">
+    {% csrf_token %}
+    <div class="dialog-head">
+      <div>
+        <p>ÉVALUATION</p>
+        <h2 id="reviewTitle">Donner votre avis</h2>
+      </div>
+      <button type="button" id="reviewCloseBtn" class="close-btn" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label>Note (1 à 5 étoiles)</label>
+      <div class="star-rating-select" id="starRatingSelect">
+        <span data-star="1" class="is-selected">★</span>
+        <span data-star="2" class="is-selected">★</span>
+        <span data-star="3" class="is-selected">★</span>
+        <span data-star="4" class="is-selected">★</span>
+        <span data-star="5" class="is-selected">★</span>
+      </div>
+      <input type="hidden" id="reviewNoteInput" name="note" value="5">
+    </div>
+    <div class="form-group">
+      <label for="reviewCommentInput">Votre avis argumenté</label>
+      <textarea id="reviewCommentInput" name="commentaire" rows="3" placeholder="Expliquez en quoi cette référence IA est adaptée à votre besoin..." required></textarea>
+    </div>
+    <button type="submit" id="submitReviewBtn" class="dialog-primary">Publier l'avis</button>
+  </form>
+</dialog>
+
+<!-- ═══════════════════════════════════════
+     DIALOG : Proposer une référence IA
+═══════════════════════════════════════ -->
+<dialog id="proposeToolDialog" class="utility-dialog" aria-labelledby="proposeTitle">
+  <form id="proposeToolForm">
+    {% csrf_token %}
+    <div class="dialog-head">
+      <div>
+        <p>COMMUNAUTÉ</p>
+        <h2 id="proposeTitle">Proposer une référence IA</h2>
+      </div>
+      <button type="button" id="proposeToolCloseBtn" class="close-btn" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label for="proposeName">Nom de l'outil / référence IA</label>
+      <input type="text" id="proposeName" name="nom" placeholder="Ex: Cursor AI, Copilot, Perplexity..." required>
+    </div>
+    <div class="form-group">
+      <label for="proposeUrl">URL du site officiel</label>
+      <input type="url" id="proposeUrl" name="url_site" placeholder="https://..." required>
+    </div>
+    <div class="form-group">
+      <label for="proposeCategory">Catégorie</label>
+      <select id="proposeCategory" name="categorie_id">
+        <option value="">Sélectionnez une catégorie</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}">{{ cat.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="flex-direction:row;gap:12px;">
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <label for="proposeTariff">Tarification</label>
+        <select id="proposeTariff" name="type_tarification">
+          <option value="Gratuit">Gratuit</option>
+          <option value="Freemium" selected>Freemium</option>
+          <option value="Payant">Payant</option>
+          <option value="Open-Source">Open-Source</option>
+        </select>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <label for="proposeIntegration">Intégration</label>
+        <select id="proposeIntegration" name="type_integration">
+          <option value="Web / API" selected>Web / API</option>
+          <option value="Extension IDE">Extension IDE</option>
+          <option value="CLI / Terminal">CLI / Terminal</option>
+          <option value="SaaS">SaaS</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="proposeDescription">Description technique</label>
+      <textarea id="proposeDescription" name="description" rows="3" placeholder="Décrivez les cas d'usage et fonctionnalités principales de cette référence IA..." required></textarea>
+    </div>
+    <button type="submit" id="submitProposeBtn" class="dialog-primary">Soumettre pour validation</button>
+  </form>
+</dialog>
+
+{% if not request.user.is_authenticated %}
+<div class="overlay-screen" id="startupOverlay" style="position:fixed;inset:0;background:rgba(22,18,13,.96);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(10px);">
+  <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:40px;width:360px;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow-lg);">
+    <div style="text-align:center;">
+      <div style="width:48px;height:48px;background:linear-gradient(135deg,var(--accent),#c8782a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#1a1208;margin:0 auto 12px;">F</div>
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;color:var(--text-primary);">Bienvenue sur Finder AI</h2>
+      <p style="font-size:13px;color:var(--text-muted);">Connectez-vous pour accéder à l'espace de recherche.</p>
+    </div>
+    <form method="post" action="{% url 'login' %}" style="display:flex;flex-direction:column;gap:12px;">
+      {% csrf_token %}
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:13px;font-weight:600;color:var(--text-secondary);">Nom d'utilisateur</label>
+        <input type="text" name="username" id="id_username" required style="padding:10px 12px;background:var(--bg-surface);border:1.5px solid var(--border-default);border-radius:var(--radius-sm);font-size:14px;color:var(--text-primary);transition:border-color .12s;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-default)'">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:13px;font-weight:600;color:var(--text-secondary);">Mot de passe</label>
+        <input type="password" name="password" id="id_password" required style="padding:10px 12px;background:var(--bg-surface);border:1.5px solid var(--border-default);border-radius:var(--radius-sm);font-size:14px;color:var(--text-primary);transition:border-color .12s;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-default)'">
+      </div>
+      <button type="submit" style="padding:12px;background:linear-gradient(135deg,var(--accent),#c8782a);border-radius:var(--radius-md);font-size:14px;font-weight:700;color:#1a1208;margin-top:4px;box-shadow:0 2px 12px var(--accent-glow);transition:background .12s;">Se connecter</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script src="{% static 'js/script.js' %}?v=21" defer></script>
+</body>
+</html>
