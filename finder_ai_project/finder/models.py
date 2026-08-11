@@ -268,6 +268,16 @@ class ResearchJob(models.Model):
         ("failed",    "Échec"),
     ]
 
+    # Utilisateur ayant lancé la recherche : permet de comptabiliser le quota
+    # journalier (3 recherches gratuites) et l'historique serveur réel.
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="research_jobs",
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     query = models.CharField(max_length=500)
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True

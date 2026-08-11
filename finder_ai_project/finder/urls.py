@@ -99,6 +99,7 @@ urlpatterns = [
     # API JSON — Recherche Web IA (Tavily)
     # ------------------------------------------------------------------
     path("api/research/", api_views.ResearchStartAPIView.as_view(), name="research_start"),
+    path("api/quota/", api_views.api_quota, name="api_quota"),
 
     # ------------------------------------------------------------------
     # API JSON — Paramètres utilisateur

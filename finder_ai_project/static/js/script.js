@@ -29,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     sessionKeywords: [],
     sessionResults: {},
     activeSessionKeyword: null,
+    activeTool: null,
+    quota: { used: 0, limit: 3, est_abonne_plus: false, limit_reached: false },
+    numPages: 1,
+    totalTools: 0,
+    semanticActive: false,
     settings: {
       resultStyle: 'balanced',
       preferredLanguage: 'fr',
@@ -121,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     prevPageBtn: document.getElementById('prevPageBtn'),
     nextPageBtn: document.getElementById('nextPageBtn'),
     paginationInfo: document.getElementById('paginationInfo'),
+    semanticBadge: document.getElementById('semanticBadge'),
 
     // Result Panel
     panelStatusLabel: document.getElementById('panelStatusLabel'),
@@ -151,6 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
     closeProjectsBtn: document.getElementById('closeProjectsBtn'),
     projectsGrid: document.getElementById('projectsGrid'),
     newProjectBtn: document.getElementById('newProjectBtn'),
+    newProjectForm: document.getElementById('newProjectForm'),
+    newProjectName: document.getElementById('newProjectName'),
+    newProjectDescription: document.getElementById('newProjectDescription'),
+    createProjectBtn: document.getElementById('createProjectBtn'),
+    projectCreateStatus: document.getElementById('projectCreateStatus'),
 
     settingsDialog: document.getElementById('settingsDialog'),
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
@@ -191,6 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
     reviewCloseBtn: document.getElementById('reviewCloseBtn'),
     starRatingSelect: document.getElementById('starRatingSelect'),
     reviewNoteInput: document.getElementById('reviewNoteInput'),
+    reviewCommentInput: document.getElementById('reviewCommentInput'),
+    submitReviewBtn: document.getElementById('submitReviewBtn'),
+    reviewFormStatus: document.getElementById('reviewFormStatus'),
 
     proposeToolDialog: document.getElementById('proposeToolDialog'),
     proposeToolForm: document.getElementById('proposeToolForm'),
@@ -259,9 +273,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateUsageCounter() {
-    const todayStr = new Date().toLocaleDateString();
-    const todayCount = STATE.history.filter(h => h.fullDate === new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })).length;
-    if (DOM.usageCount) DOM.usageCount.textContent = `${Math.min(todayCount, 3)}/3`;
+    // Compteur serveur réel (ResearchJob) — le comptage localStorage est abandonné.
+    if (!DOM.usageCount) return;
+    if (STATE.quota.est_abonne_plus) {
+      DOM.usageCount.textContent = '∞';
+      return;
+    }
+    const limit = STATE.quota.limit || 3;
+    const used = typeof STATE.quota.used === 'number' ? STATE.quota.used : 0;
+    DOM.usageCount.textContent = `${Math.min(used, limit)}/${limit}`;
+  }
+
+  async function loadQuota() {
+    try {
+      const res = await fetch('/api/quota/');
+      if (!res.ok) throw new Error('quota unavailable');
+      const data = await res.json();
+      if (data.ok) STATE.quota = { ...STATE.quota, ...data };
+    } catch (e) {
+      // Réseau/API indisponible : affichage neutre 0/3 par défaut.
+      STATE.quota = { used: 0, limit: 3, est_abonne_plus: false, limit_reached: false };
+    }
+    updateUsageCounter();
+  }
+
+  function quotaEstDepasse() {
+    return !STATE.quota.est_abonne_plus && STATE.quota.used >= (STATE.quota.limit || 3);
+  }
+
+  function proposerActivationPlus() {
+    if (DOM.upgradeDialog) DOM.upgradeDialog.showModal();
   }
 
   function updateHistoryButtons() {
@@ -509,6 +550,16 @@ document.addEventListener('DOMContentLoaded', () => {
   async function executeSearch(query) {
     if (!query || !query.trim()) return;
     const cleanQuery = query.trim();
+
+    // Quota journalier : refuse proprement quand la limite gratuite est atteinte.
+    if (quotaEstDepasse()) {
+      if (DOM.resultDescription) DOM.resultDescription.textContent = 'Limite de recherches gratuites atteinte pour aujourd\'hui.';
+      if (DOM.researchResults) DOM.researchResults.innerHTML = '<p class="result-empty is-error">Activez le Plan Finder Plus pour continuer à rechercher sans limite.</p>';
+      showToast('Limite quotidienne atteinte — activez Finder Plus', 4000);
+      proposerActivationPlus();
+      return;
+    }
+
     readSettingsFromControls();
     persistLocalSettings();
 
@@ -588,6 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderKeywordTabs();
       renderSessionChips();
       saveHistory(cleanQuery, data);
+      loadQuota(); // Re-synchronise le compteur avec le serveur
       showToast('Analyse terminée !');
 
     } catch (err) {
@@ -778,6 +830,15 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.resultLink.style.display = 'flex';
     }
 
+    // Outil actif : nécessaire pour les favoris et les avis
+    STATE.activeTool = data.meilleur_outil || null;
+    STATE.activeToolId = data.meilleur_outil ? data.meilleur_outil.id : null;
+    renderFavoriState();
+    renderReviews(data.meilleur_outil ? (data.meilleur_outil.avis || []) : []);
+    if (DOM.resultRatingBadge && data.meilleur_outil) {
+      DOM.resultRatingBadge.textContent = `${(data.meilleur_outil.score || 0)}/5`;
+    }
+
     // Reasons
     if (DOM.reasonList && data.points_cles) {
       DOM.reasonList.innerHTML = data.points_cles.map((pt, i) => `
@@ -810,6 +871,292 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ──────────────────────────────────────────────────
+     6b. FAVORIS & AVIS
+  ────────────────────────────────────────────────── */
+  function renderFavoriState() {
+    if (!DOM.toggleFavoriBtn) return;
+    const isFav = !!(STATE.activeTool && STATE.activeTool.is_favori);
+    DOM.toggleFavoriBtn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+    DOM.toggleFavoriBtn.classList.toggle('is-favori', isFav);
+    const svg = DOM.toggleFavoriBtn.querySelector('svg');
+    if (svg) svg.setAttribute('fill', isFav ? 'currentColor' : 'none');
+    DOM.toggleFavoriBtn.title = isFav ? 'Retirer des favoris' : 'Ajouter aux favoris';
+  }
+
+  async function toggleFavori() {
+    if (!STATE.activeToolId) {
+      showToast('Sélectionnez un outil avant d\'ajouter un favori.');
+      return;
+    }
+    const wasFav = !!(STATE.activeTool && STATE.activeTool.is_favori);
+    // Optimisme : bascule immédiate pour un retour visuel instantané.
+    if (STATE.activeTool) STATE.activeTool.is_favori = !wasFav;
+    renderFavoriState();
+    try {
+      const res = await fetch(`/api/outils/${STATE.activeToolId}/favoris/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur favori');
+      if (STATE.activeTool) STATE.activeTool.is_favori = data.is_favori;
+      renderFavoriState();
+      showToast(data.message || (data.is_favori ? 'Ajouté aux favoris' : 'Retiré des favoris'));
+    } catch (err) {
+      if (STATE.activeTool) STATE.activeTool.is_favori = wasFav;
+      renderFavoriState();
+      showToast('Impossible de mettre à jour le favori');
+    }
+  }
+
+  function renderReviews(reviews) {
+    if (!DOM.reviewsList) return;
+    const list = Array.isArray(reviews) ? reviews : [];
+    if (list.length === 0) {
+      DOM.reviewsList.innerHTML = '<p class="result-empty">Aucun avis pour le moment.</p>';
+      return;
+    }
+    DOM.reviewsList.innerHTML = list.map(r => `
+      <div class="review-item">
+        <div class="review-item-head">
+          <strong>${escapeHTML(r.auteur || 'Utilisateur')}</strong>
+          <span class="review-stars" aria-label="${r.note || 0} étoiles">${'★'.repeat(Math.min(r.note || 0, 5))}${'☆'.repeat(5 - Math.min(r.note || 0, 5))}</span>
+        </div>
+        <span class="review-date">${escapeHTML(r.date_creation || '')}</span>
+        <p>${escapeHTML(r.commentaire || '')}</p>
+      </div>
+    `).join('');
+  }
+
+  /* ──────────────────────────────────────────────────
+     6c. PROJETS PERSONNALISÉS (/api/projets/)
+  ────────────────────────────────────────────────── */
+  async function loadProjects() {
+    try {
+      const res = await fetch('/api/projets/');
+      if (!res.ok) return;
+      const data = await res.json();
+      renderProjectsGrid(data.projets || []);
+    } catch (e) {
+      console.warn('Could not load projects:', e);
+    }
+  }
+
+  function renderProjectsGrid(projets) {
+    if (!DOM.projectsGrid) return;
+    // Conserve la carte "Nouveau projet" et retire les cartes précédentes.
+    DOM.projectsGrid.querySelectorAll('.project-card:not(.new-project-card), .projects-empty').forEach(el => el.remove());
+
+    if (!projets.length) {
+      const empty = document.createElement('p');
+      empty.className = 'projects-empty';
+      empty.textContent = 'Aucun projet pour le moment. Créez-en un pour regrouper vos recherches.';
+      DOM.projectsGrid.appendChild(empty);
+      return;
+    }
+
+    projets.forEach(p => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'project-card';
+      card.dataset.id = p.id;
+      card.title = 'Ouvrir ce projet';
+      card.innerHTML = `
+        <div class="project-icon">
+          <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <strong>${escapeHTML(p.nom)}</strong>
+        <small>${escapeHTML(p.description || '')}</small>
+        <span class="project-meta">${p.outils_count || 0} outil${(p.outils_count || 0) > 1 ? 's' : ''} · ${escapeHTML(p.date_creation || '')}</span>
+      `;
+      DOM.projectsGrid.appendChild(card);
+    });
+  }
+
+  async function createProject(nom, description) {
+    const res = await fetch('/api/projets/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nom, description })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Impossible de créer le projet.');
+    return data;
+  }
+
+  /* ──────────────────────────────────────────────────
+     6d. PAGINATION CATALOGUE (/api/outils/)
+  ────────────────────────────────────────────────── */
+  async function loadToolsPage(page) {
+    readSettingsFromControls();
+    const params = new URLSearchParams();
+    params.set('page', String(page || 1));
+    params.set('page_size', String(STATE.pageSize || 8));
+    if (STATE.activeCategory && STATE.activeCategory !== 'all') params.set('categorie', STATE.activeCategory);
+    if (STATE.activeTag && STATE.activeTag !== 'all') params.set('tags[]', STATE.activeTag);
+    if (STATE.settings.defaultPricing && STATE.settings.defaultPricing !== 'all') params.set('tarification', STATE.settings.defaultPricing);
+
+    try {
+      const res = await fetch(`/api/outils/?${params.toString()}`);
+      if (!res.ok) throw new Error('Erreur catalogue');
+      const data = await res.json();
+      STATE.currentPage = data.current_page || 1;
+      STATE.numPages = data.num_pages || 1;
+      STATE.totalTools = data.total || 0;
+      STATE.semanticActive = !!data.semantic_active;
+      renderToolsList(data.outils || []);
+      renderPagination();
+    } catch (err) {
+      if (DOM.toolsList) DOM.toolsList.innerHTML = '<p class="no-tools">Impossible de charger le catalogue.</p>';
+    }
+  }
+
+  function renderToolsList(outils) {
+    if (!DOM.toolsList) return;
+    if (!outils.length) {
+      DOM.toolsList.innerHTML = '<p class="no-tools">Aucune référence ne correspond à ces filtres.</p>';
+    } else {
+      DOM.toolsList.innerHTML = outils.map(o => `
+        <button type="button" class="tool-result"
+          data-name="${escapeHTML(o.nom)}"
+          data-description="${escapeHTML(o.description)}"
+          data-category="${escapeHTML(o.categorie ? o.categorie.nom : 'Outil IA')}"
+          data-price="${escapeHTML(o.type_tarification)}"
+          data-url="${escapeHTML(o.url_site)}"
+          data-id="${o.id}"
+          data-is-favori="${o.is_favori ? 'true' : 'false'}">
+          <span class="tool-letter">${escapeHTML(String(o.nom).slice(0, 1).toUpperCase())}</span>
+          <span>
+            <strong>${escapeHTML(o.nom)}</strong>
+            <small>${escapeHTML(o.categorie ? o.categorie.nom : 'Outil IA')} · ${escapeHTML(o.type_tarification)}</small>
+          </span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      `).join('');
+    }
+
+    if (DOM.toolsCountLabel) {
+      DOM.toolsCountLabel.textContent = `${STATE.totalTools} référence${STATE.totalTools > 1 ? 's' : ''}`;
+    }
+    if (DOM.semanticBadge) {
+      DOM.semanticBadge.hidden = !STATE.semanticActive;
+    }
+  }
+
+  function renderPagination() {
+    if (!DOM.paginationBar) return;
+    DOM.paginationBar.hidden = STATE.numPages <= 1;
+    if (DOM.prevPageBtn) DOM.prevPageBtn.disabled = STATE.currentPage <= 1;
+    if (DOM.nextPageBtn) DOM.nextPageBtn.disabled = STATE.currentPage >= STATE.numPages;
+    if (DOM.paginationInfo) {
+      DOM.paginationInfo.textContent = `Page ${STATE.currentPage} sur ${STATE.numPages || 1} — ${STATE.totalTools} outil${STATE.totalTools > 1 ? 's' : ''}`;
+    }
+  }
+
+  /* ──────────────────────────────────────────────────
+     6e. EXPORT PDF (blob généré côté client)
+  ────────────────────────────────────────────────── */
+  function generateReportPDF() {
+    const query = STATE.activeSessionKeyword || (STATE.activeTool ? STATE.activeTool.nom : 'Rapport');
+    const synthese = DOM.resultDescription ? DOM.resultDescription.textContent : '';
+    const cached = STATE.sessionResults[query];
+    const points = cached && Array.isArray(cached.points_cles) ? cached.points_cles : [];
+    const results = cached && Array.isArray(cached.resultats) ? cached.resultats : [];
+    const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const lines = [];
+    lines.push('FINDER AI - RAPPORT D\'ANALYSE');
+    lines.push('Date : ' + date);
+    lines.push('Requete : ' + query);
+    lines.push('');
+    lines.push('SYNTHESE');
+    lines.push(synthese || 'Aucune synthese disponible.');
+    lines.push('');
+    lines.push('POINTS CLES');
+    (points.length ? points : ['Aucun point cle.']).forEach(p => lines.push('- ' + p));
+    lines.push('');
+    lines.push('REFERENCES RECOMMANDEES');
+    if (results.length === 0) {
+      lines.push('Aucune reference.');
+    } else {
+      results.forEach((r, i) => {
+        lines.push((i + 1) + '. ' + r.nom + ' (' + (r.type_tarification || 'Freemium') + ')');
+        if (r.description) lines.push('   ' + r.description);
+      });
+    }
+
+    const pdfBytes = buildMinimalPdf(lines.join('\n'));
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `finder_ai_rapport_${Date.now()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast('Rapport PDF généré');
+  }
+
+  function buildMinimalPdf(text) {
+    // Génère un PDF 1.4 minimal et valide (une page, texte ASCII).
+    // On force l'ASCII (0x20-0x7E) pour que la longueur du flux soit exacte.
+    const esc = (s) => String(s).replace(/[^\x20-\x7E]/g, ' ').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+    const lines = String(text).split('\n');
+    const lineHeight = 14;
+    const margin = 50;
+    const maxChars = 82;
+    const maxLines = Math.floor((792 - 2 * margin) / lineHeight);
+    const wrapped = [];
+    lines.forEach(line => {
+      if (line.length === 0) { wrapped.push(''); return; }
+      let current = line;
+      while (current.length > maxChars) {
+        wrapped.push(current.slice(0, maxChars));
+        current = current.slice(maxChars);
+      }
+      wrapped.push(current);
+    });
+    const shown = wrapped.slice(0, maxLines);
+
+    const textObj = shown.map((line, i) => {
+      const y = 792 - margin - i * lineHeight;
+      return `BT /F1 11 Tf 50 ${y} Td (${esc(line)}) Tj ET`;
+    }).join('\n');
+
+    const chunks = ['%PDF-1.4\n'];
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      `<< /Length ${textObj.length} >>\nstream\n${textObj}\nendstream`,
+    ];
+
+    let offset = chunks[0].length;
+    const xref = [0];
+    objects.forEach((obj, idx) => {
+      xref.push(offset);
+      chunks.push(`${idx + 1} 0 obj\n${obj}\nendobj\n`);
+      offset += chunks[chunks.length - 1].length;
+    });
+    const xrefOffset = offset;
+    chunks.push(`xref\n0 ${objects.length + 1}\n`);
+    chunks.push('0000000000 65535 f \n');
+    xref.slice(1).forEach(off => chunks.push(String(off).padStart(10, '0') + ' 00000 n \n'));
+    chunks.push(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+    const data = chunks.join('');
+    const bytes = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+      const c = data.charCodeAt(i);
+      bytes[i] = c < 128 ? c : 32;
+    }
+    return bytes;
+  }
+
+  /* ──────────────────────────────────────────────────
      7. CONTEXT FILES MANAGEMENT (/api/fichiers/)
   ────────────────────────────────────────────────── */
   async function loadContextFiles() {
@@ -833,11 +1180,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     DOM.contextFilesChips.innerHTML = STATE.contextFiles.map(f => {
-      const ext = f.nom_fichier ? f.nom_fichier.split('.').pop().toUpperCase() : 'FILE';
+      const nomFichier = f.nom || f.nom_fichier || 'fichier';
+      const ext = nomFichier.split('.').pop().toUpperCase();
       return `
         <div class="file-chip" data-id="${f.id}">
           <svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-          <span>${escapeHTML(f.nom_fichier)}</span>
+          <span>${escapeHTML(nomFichier)}</span>
           <span class="chip-ext">${ext}</span>
           <button type="button" class="file-chip-remove" data-id="${f.id}" title="Supprimer">✕</button>
         </div>
@@ -845,7 +1193,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     if (DOM.contextFilesSummary) {
-      DOM.contextFilesSummary.innerHTML = STATE.contextFiles.map(f => `• ${escapeHTML(f.nom_fichier)} (${f.taille || '2 KB'})`).join('<br>');
+      DOM.contextFilesSummary.innerHTML = STATE.contextFiles.map(f => {
+        const nomFichier = f.nom || f.nom_fichier || 'fichier';
+        const taille = f.taille ? `${(f.taille / 1024).toFixed(1)} Ko` : '—';
+        return `• ${escapeHTML(nomFichier)} (${taille})`;
+      }).join('<br>');
+    }
+  }
+
+  async function uploadContextFile(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('fichier', file);
+    try {
+      const res = await fetch('/api/fichiers/upload/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Upload impossible');
+      showToast(data.message || 'Fichier ajouté au contexte');
+      loadContextFiles();
+    } catch (err) {
+      showToast(err.message || 'Erreur lors de l\'upload', 4000);
     }
   }
 
@@ -1039,23 +1410,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // File attach button -> open file dialog
+  // Fichiers de contexte : joindre / téléverser + suppression
   if (DOM.attachButton && DOM.fileInput) {
     DOM.attachButton.addEventListener('click', () => DOM.fileInput.click());
+  }
+  if (DOM.contextAddBtn && DOM.fileInput) {
+    DOM.contextAddBtn.addEventListener('click', () => DOM.fileInput.click());
+  }
+  if (DOM.fileInput) {
     DOM.fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      
-      const chip = document.createElement('div');
-      chip.className = 'attachment-chip';
-      chip.innerHTML = `
-        <svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/></svg>
-        <span>${escapeHTML(file.name)}</span>
-        <button type="button" class="remove-chip">✕</button>
-      `;
-      chip.querySelector('.remove-chip').addEventListener('click', () => chip.remove());
-      DOM.composerAttachArea.appendChild(chip);
-      showToast(`Fichier "${file.name}" prêt pour l'analyse`);
+      uploadContextFile(file);
+      DOM.fileInput.value = '';
+    });
+  }
+  if (DOM.contextFilesChips) {
+    DOM.contextFilesChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('.file-chip-remove');
+      if (btn) deleteContextFile(btn.dataset.id);
     });
   }
 
@@ -1135,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.categoryPills.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
       STATE.activeCategory = btn.dataset.cat;
-      filterTools();
+      loadToolsPage(1);
     });
   }
 
@@ -1147,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.tagPills.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('is-active'));
       btn.classList.add('is-active');
       STATE.activeTag = btn.dataset.tag;
-      filterTools();
+      loadToolsPage(1);
     });
   }
 
@@ -1165,6 +1538,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const cat = toolBtn.dataset.category;
       const price = toolBtn.dataset.price;
       const url = toolBtn.dataset.url;
+
+      // Outil actif : utilisé par les favoris et les avis
+      const id = toolBtn.dataset.id ? parseInt(toolBtn.dataset.id, 10) : null;
+      STATE.activeToolId = id;
+      STATE.activeTool = id ? {
+        id,
+        nom: name,
+        description: desc,
+        type_tarification: price,
+        categorie: cat,
+        url_site: url,
+        is_favori: toolBtn.dataset.isFavori === 'true',
+        avis: [],
+      } : null;
+      renderFavoriState();
+      renderReviews([]);
 
       if (DOM.resultPanelTitle) DOM.resultPanelTitle.textContent = name;
       if (DOM.resultDescription) DOM.resultDescription.textContent = desc;
@@ -1201,7 +1590,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.settingsDialog) {
       DOM.settingsDialog.showModal();
       switchSettingsTab(tab);
+      loadSensitiveSettings();
     }
+  }
+
+  // La clé Gemini n'est jamais injectée dans le HTML : elle est récupérée
+  // exclusivement via l'API JSON lors de l'ouverture des paramètres.
+  async function loadSensitiveSettings() {
+    try {
+      const res = await fetch('/api/settings/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.ok && DOM.geminiKeyInput) {
+        DOM.geminiKeyInput.value = data.gemini_api_key || '';
+      }
+    } catch (e) {}
   }
 
   function switchSettingsTab(tabName) {
@@ -1333,7 +1736,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await savePreferenceSettings();
         applyUiPreferences();
-        filterTools();
+        loadToolsPage(1);
         if (DOM.searchPrefsSaveStatus) DOM.searchPrefsSaveStatus.textContent = 'Préférences appliquées.';
         showToast('Préférences de recherche actives');
       } catch (err) {
@@ -1349,7 +1752,7 @@ document.addEventListener('DOMContentLoaded', () => {
       control.addEventListener('change', () => {
         readSettingsFromControls();
         persistLocalSettings();
-        filterTools();
+        loadToolsPage(1);
       });
     });
 
@@ -1428,7 +1831,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Review Modal
   if (DOM.openReviewModalBtn && DOM.reviewDialog) {
-    DOM.openReviewModalBtn.addEventListener('click', () => DOM.reviewDialog.showModal());
+    DOM.openReviewModalBtn.addEventListener('click', () => {
+      if (!STATE.activeToolId) {
+        showToast('Sélectionnez d\'abord un outil dans le catalogue.');
+        return;
+      }
+      DOM.reviewDialog.showModal();
+      if (DOM.reviewFormStatus) { DOM.reviewFormStatus.textContent = ''; DOM.reviewFormStatus.className = 'dialog-status'; }
+    });
   }
   if (DOM.reviewCloseBtn) DOM.reviewCloseBtn.addEventListener('click', () => DOM.reviewDialog.close());
 
@@ -1445,6 +1855,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Publication d'un avis -> /api/outils/<id>/avis/
+  if (DOM.reviewForm) {
+    DOM.reviewForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!STATE.activeToolId) {
+        if (DOM.reviewFormStatus) DOM.reviewFormStatus.textContent = 'Sélectionnez d\'abord un outil.';
+        return;
+      }
+      const note = DOM.reviewNoteInput ? parseInt(DOM.reviewNoteInput.value, 10) : 5;
+      const commentaire = DOM.reviewCommentInput ? DOM.reviewCommentInput.value.trim() : '';
+      if (!commentaire) {
+        if (DOM.reviewFormStatus) DOM.reviewFormStatus.textContent = 'Veuillez saisir un commentaire.';
+        return;
+      }
+      if (DOM.reviewFormStatus) { DOM.reviewFormStatus.textContent = 'Publication de votre avis...'; DOM.reviewFormStatus.className = 'dialog-status'; }
+      if (DOM.submitReviewBtn) { DOM.submitReviewBtn.disabled = true; DOM.submitReviewBtn.textContent = 'Publication…'; }
+      try {
+        const res = await fetch(`/api/outils/${STATE.activeToolId}/avis/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ note, commentaire })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Impossible de publier l\'avis');
+
+        if (DOM.reviewFormStatus) {
+          DOM.reviewFormStatus.textContent = data.message || 'Votre avis a été publié.';
+          DOM.reviewFormStatus.classList.add('is-success');
+        }
+        // Met à jour la liste des avis affichée dans le panneau
+        if (STATE.activeTool) {
+          const avis = Array.isArray(STATE.activeTool.avis) ? STATE.activeTool.avis.slice() : [];
+          avis.unshift(data.new_avis);
+          STATE.activeTool.avis = avis;
+          STATE.activeTool.score = data.score;
+          if (DOM.resultRatingBadge) DOM.resultRatingBadge.textContent = `${data.score}/5`;
+          renderReviews(avis);
+        }
+        DOM.reviewForm.reset();
+        if (DOM.starRatingSelect) {
+          DOM.starRatingSelect.querySelectorAll('span').forEach((s, idx) => s.classList.toggle('is-selected', idx < 5));
+        }
+        setTimeout(() => DOM.reviewDialog.close(), 1200);
+      } catch (err) {
+        if (DOM.reviewFormStatus) {
+          DOM.reviewFormStatus.textContent = err.message;
+          DOM.reviewFormStatus.classList.add('is-error');
+        }
+      } finally {
+        if (DOM.submitReviewBtn) { DOM.submitReviewBtn.disabled = false; DOM.submitReviewBtn.textContent = 'Publier l\'avis'; }
+      }
+    });
+  }
+
   // Copy result text
   if (DOM.copyResultButton) {
     DOM.copyResultButton.addEventListener('click', () => {
@@ -1452,6 +1916,109 @@ document.addEventListener('DOMContentLoaded', () => {
       const desc = DOM.resultDescription ? DOM.resultDescription.textContent : '';
       const text = `${title}\n\n${desc}`;
       navigator.clipboard.writeText(text).then(() => showToast('Synthèse copiée dans le presse-papier !'));
+    });
+  }
+
+  // Favoris : toggle via l'API
+  if (DOM.toggleFavoriBtn) {
+    DOM.toggleFavoriBtn.addEventListener('click', toggleFavori);
+  }
+
+  // Export PDF (blob réel généré côté client)
+  if (DOM.downloadPdfCta) DOM.downloadPdfCta.addEventListener('click', generateReportPDF);
+  if (DOM.downloadResultButton) DOM.downloadResultButton.addEventListener('click', generateReportPDF);
+
+  // Projets : création
+  if (DOM.newProjectForm) {
+    DOM.newProjectForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nom = (DOM.newProjectName ? DOM.newProjectName.value : '').trim();
+      const description = DOM.newProjectDescription ? DOM.newProjectDescription.value.trim() : '';
+      if (!nom) {
+        if (DOM.projectCreateStatus) DOM.projectCreateStatus.textContent = 'Le nom du projet est requis.';
+        return;
+      }
+      if (DOM.projectCreateStatus) DOM.projectCreateStatus.textContent = 'Création...';
+      if (DOM.createProjectBtn) DOM.createProjectBtn.disabled = true;
+      try {
+        await createProject(nom, description);
+        if (DOM.projectCreateStatus) DOM.projectCreateStatus.textContent = 'Projet créé.';
+        DOM.newProjectForm.reset();
+        loadProjects();
+      } catch (err) {
+        if (DOM.projectCreateStatus) DOM.projectCreateStatus.textContent = err.message;
+      } finally {
+        if (DOM.createProjectBtn) DOM.createProjectBtn.disabled = false;
+      }
+    });
+  }
+  if (DOM.newProjectBtn) {
+    DOM.newProjectBtn.addEventListener('click', () => {
+      if (DOM.newProjectName) DOM.newProjectName.focus();
+    });
+  }
+
+  // Pagination réelle via /api/outils/
+  if (DOM.prevPageBtn) {
+    DOM.prevPageBtn.addEventListener('click', () => {
+      if (STATE.currentPage > 1) loadToolsPage(STATE.currentPage - 1);
+    });
+  }
+  if (DOM.nextPageBtn) {
+    DOM.nextPageBtn.addEventListener('click', () => {
+      if (STATE.currentPage < STATE.numPages) loadToolsPage(STATE.currentPage + 1);
+    });
+  }
+
+  // Explorateur : affiche/masque le catalogue paginé
+  if (DOM.toolsButton) {
+    DOM.toolsButton.addEventListener('click', () => {
+      const contentArea = document.querySelector('.content-area');
+      if (!contentArea) return;
+      const currentlyHidden = !contentArea.style.display || contentArea.style.display === 'none';
+      contentArea.style.display = currentlyHidden ? 'block' : 'none';
+      if (currentlyHidden) loadToolsPage(STATE.currentPage || 1);
+    });
+  }
+
+  // Épingler un projet (localStorage)
+  if (DOM.pinProjectButton) {
+    DOM.pinProjectButton.addEventListener('click', () => {
+      const isPinned = DOM.pinProjectButton.getAttribute('aria-pressed') === 'true';
+      const next = !isPinned;
+      DOM.pinProjectButton.setAttribute('aria-pressed', next ? 'true' : 'false');
+      DOM.pinProjectButton.classList.toggle('is-active', next);
+      try {
+        if (next) localStorage.setItem('finder_ai_pinned_project', STATE.activeToolId ? String(STATE.activeToolId) : 'workspace');
+        else localStorage.removeItem('finder_ai_pinned_project');
+      } catch (e) {}
+      showToast(next ? 'Projet épinglé dans l\'espace de travail' : 'Projet détaché');
+    });
+  }
+
+  // Menu d'actions du projet (nouvelle recherche / copier le lien)
+  if (DOM.projectActionsButton && DOM.projectActionMenu) {
+    DOM.projectActionsButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (DOM.projectActionMenu.hasAttribute('hidden')) DOM.projectActionMenu.removeAttribute('hidden');
+      else DOM.projectActionMenu.setAttribute('hidden', '');
+    });
+    document.addEventListener('click', (e) => {
+      if (!DOM.projectActionMenu.contains(e.target) && !DOM.projectActionsButton.contains(e.target)) {
+        DOM.projectActionMenu.setAttribute('hidden', '');
+      }
+    });
+    const actionNewSearch = document.getElementById('actionNewSearchButton');
+    if (actionNewSearch) actionNewSearch.addEventListener('click', () => {
+      DOM.projectActionMenu.setAttribute('hidden', '');
+      if (DOM.searchInput) DOM.searchInput.focus();
+    });
+    const actionCopy = document.getElementById('actionCopyProjectButton');
+    if (actionCopy) actionCopy.addEventListener('click', () => {
+      DOM.projectActionMenu.setAttribute('hidden', '');
+      navigator.clipboard.writeText(window.location.href)
+        .then(() => showToast('Lien copié dans le presse-papier'))
+        .catch(() => showToast('Impossible de copier le lien'));
     });
   }
 
@@ -1474,7 +2041,7 @@ document.addEventListener('DOMContentLoaded', () => {
       STATE.pageSize = parseInt(e.target.value, 10);
       STATE.settings.maxResults = STATE.pageSize;
       persistLocalSettings();
-      filterTools();
+      loadToolsPage(1);
     });
   }
 
@@ -1523,8 +2090,10 @@ document.addEventListener('DOMContentLoaded', () => {
   applyUiPreferences();
   loadHistory();
   loadContextFiles();
+  loadQuota();
+  loadProjects();
+  loadToolsPage(1);
   initVoiceRecognition();
-  filterTools();
   initDynamicGreeting();
 
   console.log('⚡ FINDER-AI v13 Workspace Initialisé.');

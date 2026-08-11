@@ -69,6 +69,62 @@ def _json_ok(data: dict) -> JsonResponse:
     return JsonResponse({"ok": True, **data})
 
 
+# ---------------------------------------------------------------------------
+# Quota journalier (Plan gratuit : 3 recherches / jour)
+# ---------------------------------------------------------------------------
+
+QUOTA_GRATUIT_PAR_JOUR = 3
+
+
+def _quota_utilise(user) -> int:
+    """Nombre de recherches enregistrées aujourd'hui pour un utilisateur."""
+    if not user or not user.is_authenticated:
+        return 0
+    aujourd_hui = timezone.localdate()
+    return (
+        ResearchJob.objects.filter(user=user, created_at__date=aujourd_hui).count()
+    )
+
+
+def _est_abonne_plus(user) -> bool:
+    """Retourne True si l'utilisateur bénéficie du Plan Finder Plus."""
+    if not user or not user.is_authenticated:
+        return False
+    profile = getattr(user, "finder_profile", None)
+    return bool(profile and profile.est_abonne_plus)
+
+
+def _quota_info(user) -> dict:
+    """État du quota pour l'utilisateur connecté (usage, limite, abonnement)."""
+    plus = _est_abonne_plus(user)
+    utilise = _quota_utilise(user) if not plus else 0
+    return {
+        "used": utilise,
+        "limit": QUOTA_GRATUIT_PAR_JOUR,
+        "est_abonne_plus": plus,
+        "limit_reached": (not plus) and utilise >= QUOTA_GRATUIT_PAR_JOUR,
+    }
+
+
+def _verifier_quota(user):
+    """Bloque la recherche si le quota gratuit du jour est épuisé."""
+    info = _quota_info(user)
+    if info["limit_reached"]:
+        return _json_error(
+            "Vous avez atteint la limite de 3 recherches gratuites par jour. "
+            "Activez le Plan Finder Plus pour des recherches illimitées.",
+            429,
+        )
+    return None
+
+
+def api_quota(request):
+    """GET /api/quota/ — Renvoie le quota réel du jour (compteur serveur)."""
+    if not request.user.is_authenticated:
+        return _json_error("Authentification requise.", 401)
+    return _json_ok(_quota_info(request.user))
+
+
 def _format_research_job(job) -> dict:
     """Sérialise un ResearchJob et ses résultats en dictionnaire JSON."""
     return {
@@ -263,6 +319,11 @@ def api_recherche_workspace(request):
     if not request.user.is_authenticated:
         return _json_error("Authentification requise.", 401)
 
+    # Quota journalier : 3 recherches gratuites / jour (illimité avec Finder Plus)
+    refus_quota = _verifier_quota(request.user)
+    if refus_quota:
+        return refus_quota
+
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -371,6 +432,19 @@ def api_recherche_workspace(request):
             f"Finder AI found {len(resultats)} relevant AI reference"
             f"{'s' if len(resultats) != 1 else ''} for '{query_str}'."
         )
+
+    # Consignation serveur de la recherche : alimente le compteur de quota
+    # journalier (ResearchJob avec statut "completed" pour une recherche catalogue).
+    try:
+        ResearchJob.objects.create(
+            user=request.user,
+            query=query_str[:500],
+            status="completed",
+            summary=synthese,
+            completed_at=timezone.now(),
+        )
+    except Exception:
+        pass  # La consignation ne doit jamais faire échouer la recherche
 
     points_cles = [
         f"{len(resultats)} reference(s) classee(s) selon la pertinence du mot-cle.",
@@ -613,12 +687,27 @@ class ResearchStartAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Quota journalier : 3 recherches gratuites / jour (illimité avec Finder Plus)
+        if _quota_info(request.user)["limit_reached"]:
+            return Response(
+                {
+                    "ok": False,
+                    "error": (
+                        "Vous avez atteint la limite de 3 recherches gratuites "
+                        "par jour. Activez le Plan Finder Plus pour des recherches "
+                        "illimitées."
+                    ),
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         serializer = ResearchRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         job = ResearchJob.objects.create(
             query=serializer.validated_data["query"],
             status="pending",
+            user=request.user,
         )
 
         try:

@@ -280,13 +280,27 @@ def liste_outils(request):
 # ---------------------------------------------------------------------------
 
 @login_required
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "POST"])
 def update_settings(request):
     """
-    POST /api/settings/
-    Corps JSON : {"section": "profil"|"preferences", ...champs...}
+    GET  /api/settings/  — Retourne le profil (clé Gemini uniquement via JSON).
+    POST /api/settings/  — Corps JSON : {"section": "profil"|"preferences", ...}
     Sauvegarde les paramètres du profil et des préférences en base de données.
     """
+    # GET : renvoie les valeurs sensibles (clé API Gemini) uniquement par JSON,
+    # jamais dans le HTML de la page (évite la fuite dans le source de la page).
+    if request.method == "GET":
+        profile = getattr(request.user, "finder_profile", None)
+        return JsonResponse(
+            {
+                "ok": True,
+                "gemini_api_key": profile.gemini_api_key if profile else "",
+                "est_abonne_plus": bool(profile and profile.est_abonne_plus),
+                "search_preferences": profile.search_preferences if profile else {},
+                "ui_preferences": profile.ui_preferences if profile else {},
+            }
+        )
+
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):

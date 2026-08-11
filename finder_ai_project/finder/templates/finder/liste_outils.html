@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=21">
 </head>
 <body>
 <div class="app-frame" id="appFrame">
@@ -281,7 +281,10 @@
           <section class="catalog-section" aria-labelledby="catalogTitle">
             <div class="content-section-head">
               <h2 id="catalogTitle">Références IA recommandées</h2>
-              <span id="toolsCountLabel">{{ outils|length }} référence{{ outils|length|pluralize }}</span>
+              <div class="catalog-head-right">
+                <span id="semanticBadge" class="semantic-badge" hidden>Sémantique</span>
+                <span id="toolsCountLabel">{{ outils|length }} référence{{ outils|length|pluralize }}</span>
+              </div>
             </div>
             <div class="tool-list" id="toolsList">
               {% for outil in outils %}
@@ -438,8 +441,23 @@
             </div>
             <div class="panel-pane is-active" id="paneAnalyse"></div>
             <div class="panel-pane" id="paneSources"></div>
-            <div class="panel-pane" id="paneAvis"><div id="reviewsList"></div><span id="resultRatingBadge"></span><button id="openReviewModalBtn"></button></div>
+            <div class="panel-pane" id="paneAvis"><span id="resultRatingBadge"></span></div>
             <div class="panel-pane" id="paneMemoire"><div id="contextFilesSummary"></div></div>
+          </div>
+
+          <!-- Section: Avis des utilisateurs -->
+          <div class="unified-section reviews-section">
+            <div class="section-title-row">
+              <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17.1 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+              <h3>Avis des utilisateurs</h3>
+            </div>
+            <div id="reviewsList" class="reviews-list" aria-live="polite">
+              <p class="result-empty">Aucun avis pour le moment.</p>
+            </div>
+            <button type="button" class="reviews-cta" id="openReviewModalBtn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              Donner votre avis
+            </button>
           </div>
 
           <!-- Export Block -->
@@ -494,6 +512,13 @@
       </button>
     </header>
     <div class="dialog-content">
+      <form id="newProjectForm" class="project-create-form">
+        {% csrf_token %}
+        <input type="text" id="newProjectName" name="nom" placeholder="Nom du nouveau projet..." required maxlength="120" autocomplete="off">
+        <input type="text" id="newProjectDescription" name="description" placeholder="Description (facultatif)" maxlength="300" autocomplete="off">
+        <button type="submit" id="createProjectBtn">Créer</button>
+        <span id="projectCreateStatus" class="project-create-status" aria-live="polite"></span>
+      </form>
       <div class="projects-grid" id="projectsGrid">
         <button type="button" class="project-card new-project-card" id="newProjectBtn">
           <div class="project-icon">
@@ -742,7 +767,7 @@
           <div class="settings-grid">
             <label>Clé API Gemini optionnelle
               <span class="settings-secret-field">
-                <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." value="{{ profile.gemini_api_key|default:'' }}">
+                <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." autocomplete="off">
                 <button type="button" class="key-toggle-btn" id="geminiKeyToggle" aria-label="Afficher ou masquer la clé">
                   <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
@@ -841,6 +866,7 @@
       <label for="reviewCommentInput">Votre avis argumenté</label>
       <textarea id="reviewCommentInput" name="commentaire" rows="3" placeholder="Expliquez en quoi cette référence IA est adaptée à votre besoin..." required></textarea>
     </div>
+    <div id="reviewFormStatus" class="dialog-status" aria-live="polite"></div>
     <button type="submit" id="submitReviewBtn" class="dialog-primary">Publier l'avis</button>
   </form>
 </dialog>
@@ -929,6 +955,6 @@
 </div>
 {% endif %}
 
-<script src="{% static 'js/script.js' %}?v=21" defer></script>
+<script src="{% static 'js/script.js' %}?v=22" defer></script>
 </body>
 </html>
