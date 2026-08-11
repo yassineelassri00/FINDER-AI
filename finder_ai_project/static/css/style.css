@@ -1559,6 +1559,14 @@ body {
   background: var(--bg-surface);
 }
 
+.settings-field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .card-actions-row,
 .settings-save-row {
   display: flex;

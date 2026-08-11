@@ -70,20 +70,10 @@ def _json_ok(data: dict) -> JsonResponse:
 
 
 # ---------------------------------------------------------------------------
-# Quota journalier (Plan gratuit : 3 recherches / jour)
+# Quota gratuit (Plan gratuit : 3 recherches au total, compteur serveur réel)
 # ---------------------------------------------------------------------------
 
 QUOTA_GRATUIT_PAR_JOUR = 3
-
-
-def _quota_utilise(user) -> int:
-    """Nombre de recherches enregistrées aujourd'hui pour un utilisateur."""
-    if not user or not user.is_authenticated:
-        return 0
-    aujourd_hui = timezone.localdate()
-    return (
-        ResearchJob.objects.filter(user=user, created_at__date=aujourd_hui).count()
-    )
 
 
 def _est_abonne_plus(user) -> bool:
@@ -94,32 +84,57 @@ def _est_abonne_plus(user) -> bool:
     return bool(profile and profile.est_abonne_plus)
 
 
+def _recherches_restantes(user) -> int:
+    """Nombre de recherches gratuites restantes (champ du UserProfile)."""
+    if not user or not user.is_authenticated:
+        return 0
+    profile = getattr(user, "finder_profile", None)
+    if not profile:
+        return QUOTA_GRATUIT_PAR_JOUR
+    return profile.recherches_restantes
+
+
 def _quota_info(user) -> dict:
-    """État du quota pour l'utilisateur connecté (usage, limite, abonnement)."""
+    """État du quota pour l'utilisateur connecté (compteur serveur réel)."""
     plus = _est_abonne_plus(user)
-    utilise = _quota_utilise(user) if not plus else 0
+    restantes = _recherches_restantes(user)
     return {
-        "used": utilise,
+        "used": max(0, QUOTA_GRATUIT_PAR_JOUR - restantes),
+        "recherches_restantes": restantes,
         "limit": QUOTA_GRATUIT_PAR_JOUR,
         "est_abonne_plus": plus,
-        "limit_reached": (not plus) and utilise >= QUOTA_GRATUIT_PAR_JOUR,
+        "limit_reached": (not plus) and restantes <= 0,
     }
 
 
 def _verifier_quota(user):
-    """Bloque la recherche si le quota gratuit du jour est épuisé."""
+    """Bloque la recherche si le quota gratuit est épuisé (429)."""
     info = _quota_info(user)
     if info["limit_reached"]:
         return _json_error(
-            "Vous avez atteint la limite de 3 recherches gratuites par jour. "
+            "Vous avez atteint la limite de 3 recherches gratuites. "
             "Activez le Plan Finder Plus pour des recherches illimitées.",
             429,
         )
     return None
 
 
+def _decrementer_quota(user):
+    """
+    Décrémente le compteur `recherches_restantes` de l'utilisateur.
+
+    Ne fait rien pour les abonnés Finder Plus et ne descend jamais sous zéro.
+    """
+    if not user or not user.is_authenticated:
+        return
+    profile = getattr(user, "finder_profile", None)
+    if profile and not profile.est_abonne_plus and profile.recherches_restantes > 0:
+        profile.recherches_restantes -= 1
+        profile.save(update_fields=["recherches_restantes"])
+
+
 def api_quota(request):
-    """GET /api/quota/ — Renvoie le quota réel du jour (compteur serveur)."""
+    """GET /api/quota/ — Renvoie le quota réel (compteur serveur)."""
     if not request.user.is_authenticated:
         return _json_error("Authentification requise.", 401)
     return _json_ok(_quota_info(request.user))
@@ -319,7 +334,7 @@ def api_recherche_workspace(request):
     if not request.user.is_authenticated:
         return _json_error("Authentification requise.", 401)
 
-    # Quota journalier : 3 recherches gratuites / jour (illimité avec Finder Plus)
+    # Quota gratuit : 3 recherches au total (illimité avec Finder Plus).
     refus_quota = _verifier_quota(request.user)
     if refus_quota:
         return refus_quota
@@ -332,6 +347,9 @@ def api_recherche_workspace(request):
     query_str = data.get("q", "").strip()
     if not query_str:
         return _json_error("La recherche est vide.")
+
+    # Consomme une recherche du compteur gratuit (compteur serveur réel).
+    _decrementer_quota(request.user)
 
     try:
         max_results = max(1, min(int(data.get("max_results", 8)), 20))
@@ -433,8 +451,7 @@ def api_recherche_workspace(request):
             f"{'s' if len(resultats) != 1 else ''} for '{query_str}'."
         )
 
-    # Consignation serveur de la recherche : alimente le compteur de quota
-    # journalier (ResearchJob avec statut "completed" pour une recherche catalogue).
+    # Consignation serveur de la recherche (historique réel des recherches).
     try:
         ResearchJob.objects.create(
             user=request.user,
@@ -462,6 +479,8 @@ def api_recherche_workspace(request):
             "meilleur_outil": meilleur,
             "resultats": resultats,
             "points_cles": points_cles,
+            "recherches_restantes": _recherches_restantes(request.user),
+            "quota": _quota_info(request.user),
             "preferences_appliquees": {
                 "max_results": max_results,
                 "result_style": result_style,
@@ -687,15 +706,14 @@ class ResearchStartAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Quota journalier : 3 recherches gratuites / jour (illimité avec Finder Plus)
+        # Quota gratuit : 3 recherches au total (illimité avec Finder Plus)
         if _quota_info(request.user)["limit_reached"]:
             return Response(
                 {
                     "ok": False,
                     "error": (
-                        "Vous avez atteint la limite de 3 recherches gratuites "
-                        "par jour. Activez le Plan Finder Plus pour des recherches "
-                        "illimitées."
+                        "Vous avez atteint la limite de 3 recherches gratuites. "
+                        "Activez le Plan Finder Plus pour des recherches illimitées."
                     ),
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -709,6 +727,9 @@ class ResearchStartAPIView(APIView):
             status="pending",
             user=request.user,
         )
+
+        # Consomme une recherche du compteur gratuit (compteur serveur réel).
+        _decrementer_quota(request.user)
 
         try:
             perform_web_research(job)

@@ -365,6 +365,16 @@ class UserProfile(models.Model):
     watch_frequency = models.CharField(max_length=30, default="on_demand")
     onboarding_completed = models.BooleanField(default=True)
 
+    # --- Quota gratuit (compteur serveur réel, pas de localStorage) ---
+    recherches_restantes = models.PositiveIntegerField(
+        default=3,
+        verbose_name="Recherches restantes",
+        help_text=(
+            "Nombre de recherches gratuites restantes avant l'activation "
+            "du Plan Finder Plus (ignore pour les abonnés Plus)."
+        ),
+    )
+
     # --- Abonnement Finder Plus (activé par code d'invitation, gratuit) ---
     est_abonne_plus = models.BooleanField(
         default=False,

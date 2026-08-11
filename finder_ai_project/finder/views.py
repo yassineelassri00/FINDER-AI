@@ -283,18 +283,18 @@ def liste_outils(request):
 @require_http_methods(["GET", "POST"])
 def update_settings(request):
     """
-    GET  /api/settings/  — Retourne le profil (clé Gemini uniquement via JSON).
+    GET  /api/settings/  — Retourne les préférences NON sensibles du profil.
     POST /api/settings/  — Corps JSON : {"section": "profil"|"preferences", ...}
     Sauvegarde les paramètres du profil et des préférences en base de données.
     """
-    # GET : renvoie les valeurs sensibles (clé API Gemini) uniquement par JSON,
-    # jamais dans le HTML de la page (évite la fuite dans le source de la page).
+    # GET : la clé API Gemini n'est JAMAIS renvoyée au client (ni en HTML,
+    # ni en JSON) : elle ne transite plus jamais vers le navigateur (Bug S4).
+    # Elle ne peut être ni lue ni affichée : uniquement remplacée (voir POST).
     if request.method == "GET":
         profile = getattr(request.user, "finder_profile", None)
         return JsonResponse(
             {
                 "ok": True,
-                "gemini_api_key": profile.gemini_api_key if profile else "",
                 "est_abonne_plus": bool(profile and profile.est_abonne_plus),
                 "search_preferences": profile.search_preferences if profile else {},
                 "ui_preferences": profile.ui_preferences if profile else {},
@@ -387,26 +387,28 @@ def update_settings(request):
                 profile.budget_preference = budget_preference
             if watch_frequency in valid_frequency:
                 profile.watch_frequency = watch_frequency
-            profile.gemini_api_key = gemini_api_key
             profile.goals = _clean_list(goals)
             profile.research_sources = _clean_list(research_sources)
             profile.technology_stack = _clean_list(technology_stack)
             profile.search_preferences = _clean_dict(search_preferences)
             profile.ui_preferences = _clean_dict(ui_preferences)
-            profile.save(
-                update_fields=[
-                    "result_style",
-                    "preferred_language",
-                    "budget_preference",
-                    "watch_frequency",
-                    "gemini_api_key",
-                    "goals",
-                    "research_sources",
-                    "technology_stack",
-                    "search_preferences",
-                    "ui_preferences",
-                ]
-            )
+            # S4 : la clé Gemini n'est mise à jour QUE si une nouvelle valeur
+            # est saisie — un champ vide ne doit jamais écraser la clé stockée.
+            update_fields = [
+                "result_style",
+                "preferred_language",
+                "budget_preference",
+                "watch_frequency",
+                "goals",
+                "research_sources",
+                "technology_stack",
+                "search_preferences",
+                "ui_preferences",
+            ]
+            if gemini_api_key:
+                profile.gemini_api_key = gemini_api_key
+                update_fields.append("gemini_api_key")
+            profile.save(update_fields=update_fields)
 
         return JsonResponse({"ok": True, "message": "Préférences mises à jour."})
 

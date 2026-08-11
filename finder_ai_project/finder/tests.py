@@ -286,6 +286,114 @@ class APITestCase(TestCase):
         self.assertLessEqual(len(data["resultats"]), 1)
         self.assertEqual(data["preferences_appliquees"]["default_pricing"], "Payant")
 
+    def test_api_recherche_decremente_le_quota(self):
+        """Chaque recherche consomme une unité du compteur serveur."""
+        self.client.login(username="devuser", password="password123")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.recherches_restantes, 3)
+
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "generation images"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["recherches_restantes"], 2)
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.recherches_restantes, 2)
+
+    def test_api_recherche_quota_epuise_429(self):
+        """Une recherche avec quota épuisé doit renvoyer 429 Too Many Requests."""
+        self.client.login(username="devuser", password="password123")
+        profile = UserProfile.objects.get(user=self.user)
+        profile.recherches_restantes = 0
+        profile.save()
+
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "generation images"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 429)
+        self.assertFalse(response.json()["ok"])
+
+    def test_api_recherche_quota_illimite_pour_abonne_plus(self):
+        """Un abonné Finder Plus ignore le compteur (pas de 429, pas de décrément)."""
+        self.client.login(username="devuser", password="password123")
+        profile = UserProfile.objects.get(user=self.user)
+        profile.est_abonne_plus = True
+        profile.recherches_restantes = 0
+        profile.save()
+
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "generation images"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.recherches_restantes, 0)
+
+    def test_api_quota_renvoie_le_compteur_reel(self):
+        """GET /api/quota/ expose le compteur serveur (pas de localStorage)."""
+        self.client.login(username="devuser", password="password123")
+        response = self.client.get(reverse("api_quota"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["recherches_restantes"], 3)
+        self.assertEqual(data["limit"], 3)
+        self.assertFalse(data["limit_reached"])
+        self.assertFalse(data["est_abonne_plus"])
+
+    def test_api_settings_get_ne_divulgue_pas_la_cle_gemini(self):
+        """S4 : la clé Gemini ne doit jamais transiter vers le client."""
+        self.client.login(username="devuser", password="password123")
+        profile = UserProfile.objects.get(user=self.user)
+        profile.gemini_api_key = "AIzaSy-SECRET-TEST-KEY"
+        profile.save()
+
+        response = self.client.get(reverse("update_settings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("gemini_api_key", response.json())
+        self.assertNotIn("AIzaSy-SECRET-TEST-KEY", response.content.decode())
+
+    def test_api_settings_champ_vide_ne_ecrase_pas_la_cle(self):
+        """S4 : sauvegarder les préférences sans clé ne doit pas effacer la clé."""
+        self.client.login(username="devuser", password="password123")
+        profile = UserProfile.objects.get(user=self.user)
+        profile.gemini_api_key = "AIzaSy-KEY-EXISTANTE"
+        profile.save()
+
+        response = self.client.post(
+            reverse("update_settings"),
+            data=json.dumps(
+                {"section": "preferences", "result_style": "balanced"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        profile.refresh_from_db()
+        self.assertEqual(profile.gemini_api_key, "AIzaSy-KEY-EXISTANTE")
+
+        # Une NOUVELLE clé saisie remplace bien l'ancienne.
+        response = self.client.post(
+            reverse("update_settings"),
+            data=json.dumps(
+                {
+                    "section": "preferences",
+                    "result_style": "balanced",
+                    "gemini_api_key": "AIzaSy-NOUVELLE-CLE",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        profile.refresh_from_db()
+        self.assertEqual(profile.gemini_api_key, "AIzaSy-NOUVELLE-CLE")
+
     def test_api_outils_list_sem_fallback(self):
         """La recherche sémantique TF-IDF doit s'activer si la requête SQL ne donne rien."""
         self.client.login(username="devuser", password="password123")
@@ -657,3 +765,46 @@ class ScraperTestCase(TestCase):
         self.assertIsNotNone(log)
         self.assertGreaterEqual(log.temps_execution, 0.0)
         self.assertTrue(ScraperLog.objects.filter(id=log.id).exists())
+
+
+# ===========================================================================
+# 8. Tests de la commande de rattrapage des profils (Bug B7)
+# ===========================================================================
+
+class BackfillProfilesTestCase(TestCase):
+    """Tests de la commande `python manage.py backfill_profiles`."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="legacy", password="password123")
+        # Simule un compte créé AVANT l'introduction du signal de profil.
+        UserProfile.objects.filter(user=self.user).delete()
+
+    def test_commande_cree_les_profils_manquants(self):
+        from django.core.management import call_command
+
+        call_command("backfill_profiles")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.full_name, "legacy")
+        self.assertTrue(profile.onboarding_completed)
+        self.assertEqual(profile.recherches_restantes, 3)
+
+    def test_commande_dry_run_ne_cree_rien(self):
+        from django.core.management import call_command
+
+        call_command("backfill_profiles", "--dry-run")
+        self.assertFalse(UserProfile.objects.filter(user=self.user).exists())
+
+    def test_commande_idempotente(self):
+        from django.core.management import call_command
+
+        call_command("backfill_profiles")
+        call_command("backfill_profiles")
+        self.assertEqual(UserProfile.objects.filter(user=self.user).count(), 1)
+
+    def test_commande_sans_manquant(self):
+        from django.core.management import call_command
+
+        call_command("backfill_profiles")
+        # Tous les profils existent : la seconde exécution ne doit rien créer.
+        call_command("backfill_profiles")
+        self.assertEqual(UserProfile.objects.filter(user=self.user).count(), 1)

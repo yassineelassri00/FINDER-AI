@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sessionResults: {},
     activeSessionKeyword: null,
     activeTool: null,
-    quota: { used: 0, limit: 3, est_abonne_plus: false, limit_reached: false },
+    quota: { used: 0, recherches_restantes: 3, limit: 3, est_abonne_plus: false, limit_reached: false },
     numPages: 1,
     totalTools: 0,
     semanticActive: false,
@@ -273,15 +273,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateUsageCounter() {
-    // Compteur serveur réel (ResearchJob) — le comptage localStorage est abandonné.
+    // Compteur serveur réel (UserProfile.recherches_restantes) — pas de localStorage.
     if (!DOM.usageCount) return;
     if (STATE.quota.est_abonne_plus) {
       DOM.usageCount.textContent = '∞';
       return;
     }
     const limit = STATE.quota.limit || 3;
-    const used = typeof STATE.quota.used === 'number' ? STATE.quota.used : 0;
-    DOM.usageCount.textContent = `${Math.min(used, limit)}/${limit}`;
+    const restantes = (typeof STATE.quota.recherches_restantes === 'number')
+      ? Math.max(0, Math.min(STATE.quota.recherches_restantes, limit))
+      : limit;
+    DOM.usageCount.textContent = `${restantes}/${limit}`;
   }
 
   async function loadQuota() {
@@ -291,14 +293,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.ok) STATE.quota = { ...STATE.quota, ...data };
     } catch (e) {
-      // Réseau/API indisponible : affichage neutre 0/3 par défaut.
-      STATE.quota = { used: 0, limit: 3, est_abonne_plus: false, limit_reached: false };
+      // Réseau/API indisponible : affichage neutre 3/3 par défaut.
+      STATE.quota = { used: 0, recherches_restantes: 3, limit: 3, est_abonne_plus: false, limit_reached: false };
     }
     updateUsageCounter();
   }
 
   function quotaEstDepasse() {
-    return !STATE.quota.est_abonne_plus && STATE.quota.used >= (STATE.quota.limit || 3);
+    if (STATE.quota.est_abonne_plus) return false;
+    const restantes = STATE.quota.recherches_restantes;
+    if (typeof restantes === 'number') return restantes <= 0;
+    return STATE.quota.used >= (STATE.quota.limit || 3);
   }
 
   function proposerActivationPlus() {
@@ -483,7 +488,11 @@ document.addEventListener('DOMContentLoaded', () => {
       preferred_language: STATE.settings.preferredLanguage,
       budget_preference: STATE.settings.defaultPricing,
       watch_frequency: STATE.settings.watchFrequency,
-      gemini_api_key: DOM.geminiKeyInput ? DOM.geminiKeyInput.value : '',
+      // S4 : la clé Gemini n'est envoyée QUE si une nouvelle valeur est saisie.
+      // Le serveur ne la renvoie jamais : il est donc impossible de la réafficher.
+      ...(DOM.geminiKeyInput && DOM.geminiKeyInput.value.trim()
+        ? { gemini_api_key: DOM.geminiKeyInput.value.trim() }
+        : {}),
       goals: STATE.settings.goals,
       research_sources: STATE.settings.researchSources,
       technology_stack: STATE.settings.technologyStack,
@@ -1590,22 +1599,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.settingsDialog) {
       DOM.settingsDialog.showModal();
       switchSettingsTab(tab);
-      loadSensitiveSettings();
     }
   }
 
-  // La clé Gemini n'est jamais injectée dans le HTML : elle est récupérée
-  // exclusivement via l'API JSON lors de l'ouverture des paramètres.
-  async function loadSensitiveSettings() {
-    try {
-      const res = await fetch('/api/settings/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.ok && DOM.geminiKeyInput) {
-        DOM.geminiKeyInput.value = data.gemini_api_key || '';
-      }
-    } catch (e) {}
-  }
+  // S4 : la clé API Gemini ne transite plus jamais vers le client.
+  // Le champ reste vide et permet uniquement de saisir une NOUVELLE clé ;
+  // la clé existante ne peut ni être lue ni être affichée côté navigateur.
 
   function switchSettingsTab(tabName) {
     STATE.activeSettingsTab = tabName;
