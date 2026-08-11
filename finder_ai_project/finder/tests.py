@@ -80,6 +80,26 @@ class ModelTestCase(TestCase):
         Avis.objects.create(outil=self.outil, user=self.user2, auteur="U2", note=4, commentaire="Très bon !")
         self.assertEqual(self.outil.calculer_score(), 4.5)
 
+    def test_calculer_score_reutilise_annotation(self):
+        """with_score() doit pré-calculer score_moyen sans requête par outil."""
+        Avis.objects.create(outil=self.outil, user=self.user, auteur="U1", note=5, commentaire="Excellent !")
+        outil_annote = OutilIA.objects.with_score().get(pk=self.outil.pk)
+        self.assertTrue(hasattr(outil_annote, "score_moyen"))
+        self.assertEqual(outil_annote.calculer_score(), 5.0)
+
+    def test_url_site_unique(self):
+        """url_site doit être unique : une deuxième entrée lève IntegrityError."""
+        with self.assertRaises(IntegrityError):
+            OutilIA.objects.create(
+                nom="ChatGPT doublon",
+                description="Copie du même outil",
+                url_site="https://chatgpt.com",  # même URL que self.outil
+                type_tarification="Freemium",
+                type_integration="Web / API",
+                categorie=self.categorie,
+                est_valide=True,
+            )
+
     def test_unique_together_avis(self):
         Avis.objects.create(outil=self.outil, user=self.user, auteur="U1", note=5, commentaire="Premier avis.")
         with self.assertRaises(IntegrityError):
@@ -276,6 +296,55 @@ class APITestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data["ok"])
+
+    def test_api_outils_list_sem_fallback_respecte_filtres(self):
+        """Le fallback sémantique doit préserver les filtres catégorie/tags/tarif."""
+        autre_categorie = Categorie.objects.create(nom="Art", slug="art")
+        OutilIA.objects.create(
+            nom="Stable Diffusion",
+            description="générer des visuels artistiques",
+            url_site="https://stability.ai",
+            type_tarification="Gratuit",
+            type_integration="Web / API",
+            categorie=autre_categorie,
+            est_valide=True,
+        )
+        self.client.login(username="devuser", password="password123")
+        invalider_index()
+
+        # Requête qui ne matche pas en SQL mais oui en sémantique, avec filtre catégorie.
+        response = self.client.get(
+            reverse("api_outils_list")
+            + "?q=g%C3%A9n%C3%A9rer+des+images&mode=semantic&categorie=image-gen"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["semantic_active"])
+        # Seul Midjourney (catégorie image-gen) doit être retourné : le filtre
+        # catégorie reste appliqué même lorsque le moteur sémantique prend le relais.
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["outils"][0]["nom"], "Midjourney")
+
+    def test_api_proposer_outil_doublon_url(self):
+        """Proposer un outil dont l'URL existe déjà doit être refusé (pas de 500)."""
+        self.client.login(username="devuser", password="password123")
+        response = self.client.post(
+            reverse("api_proposer_outil"),
+            data=json.dumps(
+                {
+                    "nom": "Midjourney bis",
+                    "description": "Doublon",
+                    "url_site": "https://midjourney.com",  # déjà référencé
+                    "type_tarification": "Payant",
+                    "type_integration": "Web / Discord",
+                    "categorie_id": self.categorie.id,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
 
     def test_api_ajouter_avis(self):
         self.client.login(username="devuser", password="password123")

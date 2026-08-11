@@ -434,8 +434,16 @@ def admin_dashboard(request):
 
         return redirect("admin_dashboard")
 
-    outils_en_attente = OutilIA.objects.filter(est_valide=False).order_by("-date_ajout")
-    outils_valides    = OutilIA.objects.filter(est_valide=True).order_by("-date_ajout")[:15]
+    # with_score() : pré-calcule la moyenne des avis (le template affiche
+    # o.calculer_score par outil — évite une requête par ligne, soit N+1).
+    outils_en_attente = (
+        OutilIA.objects.with_score().filter(est_valide=False).order_by("-date_ajout")
+    )
+    outils_valides = (
+        OutilIA.objects.with_score()
+        .filter(est_valide=True)
+        .order_by("-date_ajout")[:15]
+    )
 
     return render(
         request,

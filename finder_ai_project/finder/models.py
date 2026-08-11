@@ -18,7 +18,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Avg
+from django.db.models import Avg, OuterRef, Subquery
 
 from django.conf import settings as django_settings
 
@@ -75,6 +75,36 @@ class Tag(models.Model):
 # Outil IA (cœur du catalogue)
 # ---------------------------------------------------------------------------
 
+def _sous_requete_score():
+    """
+    Sous-requête corrélée calculant la note moyenne des avis d'un outil.
+
+    Préférée à `annotate(Avg("avis__note"))` direct : une sous-requête reste
+    correcte même lorsque la requête contient des filtres M2M (tags, favoris)
+    dont la jointure provoquerait une double-comptabilisation des avis.
+    """
+    return Subquery(
+        Avis.objects.filter(outil=OuterRef("pk"))
+        .values("outil")
+        .annotate(moyenne=Avg("note"))
+        .values("moyenne"),
+    )
+
+
+class OutilIAManager(models.Manager):
+    """Gestionnaire par défaut d'OutilIA, avec optimisations d'accès aux données."""
+
+    def with_score(self):
+        """
+        Annote chaque outil avec `score_moyen` (moyenne des notes des avis).
+
+        `calculer_score()` réutilise alors la valeur annotée au lieu de lancer
+        une requête par outil : élimine le problème N+1 dans les listes,
+        les pages de catalogue et le tableau de bord d'administration.
+        """
+        return self.annotate(score_moyen=_sous_requete_score())
+
+
 class OutilIA(models.Model):
     PROVENANCE_CHOICES = [
         ("catalogue", "Catalogue officiel"),
@@ -84,7 +114,7 @@ class OutilIA(models.Model):
 
     nom = models.CharField(max_length=200)
     description = models.TextField()
-    url_site = models.URLField()
+    url_site = models.URLField(unique=True)
     type_tarification = models.CharField(max_length=100)
     type_integration = models.CharField(max_length=100)
     date_ajout = models.DateTimeField(auto_now_add=True)
@@ -119,6 +149,8 @@ class OutilIA(models.Model):
     )
     tags = models.ManyToManyField(Tag, related_name="outils", blank=True)
 
+    objects = OutilIAManager()
+
     class Meta:
         ordering = ["-date_ajout"]
         verbose_name = "Outil IA"
@@ -141,9 +173,19 @@ class OutilIA(models.Model):
     # ------------------------------------------------------------------
 
     def calculer_score(self):
-        """Retourne la note moyenne (0.0 si aucun avis)."""
-        resultat = self.avis.aggregate(moyenne=Avg("note"))["moyenne"]
-        return round(resultat, 1) if resultat is not None else 0.0
+        """
+        Retourne la note moyenne arrondie au dixième (0.0 si aucun avis).
+
+        Si la requête a annoté `score_moyen` (via `OutilIAManager.with_score`),
+        la valeur pré-calculée est réutilisée : aucune requête supplémentaire
+        par outil (élimine le N+1). Sinon, la moyenne est calculée à la volée
+        (comportement de repli pour les instances isolées).
+        """
+        if hasattr(self, "score_moyen"):
+            moyenne = self.score_moyen
+        else:
+            moyenne = self.avis.aggregate(moyenne=Avg("note"))["moyenne"]
+        return round(moyenne, 1) if moyenne is not None else 0.0
 
     def __str__(self):
         return self.nom

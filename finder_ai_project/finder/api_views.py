@@ -158,16 +158,15 @@ def api_outils_list(request):
     tags_list = [t.strip() for t in tags_list if t.strip() and t.strip() != "all"]
 
     qs = (
-        OutilIA.objects.filter(est_valide=True)
+        OutilIA.objects.with_score()
+        .filter(est_valide=True)
         .select_related("categorie")
         .prefetch_related("tags", "avis", "favoris")
     )
 
-    # --- Filtres SQL standards ---
-    if query_str:
-        qs = qs.filter(
-            Q(nom__icontains=query_str) | Q(description__icontains=query_str)
-        )
+    # --- Filtres d'attributs (catégorie, tags, tarification) ---
+    # Appliqués QUELQUE SOIT la stratégie de recherche (SQL ou sémantique) :
+    # le fallback sémantique ne doit jamais les ignorer.
     if cat_slug and cat_slug != "all":
         qs = qs.filter(categorie__slug=cat_slug)
     if tags_list:
@@ -175,12 +174,20 @@ def api_outils_list(request):
     if tarification:
         qs = qs.filter(type_tarification__icontains=tarification)
 
-    qs = qs.order_by("-date_ajout")
+    # --- Recherche textuelle : SQL d'abord, fallback sémantique ensuite ---
+    qs_texte = qs
+    if query_str:
+        qs_texte = qs.filter(
+            Q(nom__icontains=query_str) | Q(description__icontains=query_str)
+        )
 
     # --- Fallback recherche sémantique TF-IDF ---
-    # Activé si : mode=semantic ou si la recherche SQL ne donne aucun résultat
+    # Activé si : mode=semantic ou si la recherche textuelle SQL ne donne rien.
+    # Le moteur sémantique REMPLACE le filtre texte (il EST la recherche par
+    # mots-clés) mais la queryset conserve les filtres d'attributs ci-dessus :
+    # la cohérence catégorie/tags/tarification est garantie à la prise de relais.
     semantic_active = False
-    if query_str and (mode == "semantic" or not qs.exists()):
+    if query_str and (mode == "semantic" or not qs_texte.exists()):
         try:
             from .services.vector_search import recherche_semantique
             resultats_sem = recherche_semantique(query_str, top_k=20)
@@ -193,15 +200,17 @@ def api_outils_list(request):
                     output_field=IntegerField(),
                 )
                 qs = (
-                    OutilIA.objects.filter(id__in=ids_ordonnes, est_valide=True)
-                    .select_related("categorie")
-                    .prefetch_related("tags", "avis", "favoris")
+                    qs.filter(id__in=ids_ordonnes)
                     .annotate(sem_order=ordering)
                     .order_by("sem_order")
                 )
                 semantic_active = True
         except Exception:
             pass  # En cas d'erreur du moteur sémantique, on garde les résultats SQL
+
+    # Aucun fallback actif : on garde les résultats de la recherche textuelle SQL.
+    if not semantic_active:
+        qs = qs_texte.order_by("-date_ajout")
 
     # --- Pagination ---
     try:
@@ -281,7 +290,8 @@ def api_recherche_workspace(request):
     )
 
     qs = (
-        OutilIA.objects.filter(est_valide=True)
+        OutilIA.objects.with_score()
+        .filter(est_valide=True)
         .select_related("categorie")
         .prefetch_related("tags", "avis", "favoris")
     )
@@ -488,17 +498,27 @@ def api_proposer_outil(request):
 
     categorie = Categorie.objects.filter(pk=categorie_id).first() if categorie_id else None
 
-    outil = OutilIA.objects.create(
-        nom=nom,
-        description=description,
-        url_site=url_site,
-        type_tarification=type_tarif,
-        type_integration=type_integ,
-        categorie=categorie,
-        soumis_par=request.user,
-        provenance="community",
-        est_valide=False,
-    )
+    # url_site est unique : refuser proprement une proposition déjà référencée
+    # plutôt que de laisser la contrainte lever une IntegrityError (erreur 500).
+    if OutilIA.objects.filter(url_site=url_site).exists():
+        return _json_error("Cet outil est déjà référencé dans le catalogue.")
+
+    try:
+        outil = OutilIA.objects.create(
+            nom=nom,
+            description=description,
+            url_site=url_site,
+            type_tarification=type_tarif,
+            type_integration=type_integ,
+            categorie=categorie,
+            soumis_par=request.user,
+            provenance="community",
+            est_valide=False,
+        )
+    except IntegrityError:
+        # Filet de sécurité : course entre la vérification et la création
+        # (deux soumissions simultanées du même URL).
+        return _json_error("Cet outil est déjà référencé dans le catalogue.")
 
     return _json_ok(
         {
