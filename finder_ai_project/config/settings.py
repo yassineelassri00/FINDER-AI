@@ -3,9 +3,11 @@ Django settings for config project.
 
 Configuration "production-grade" :
   - Aucune clé en dur : toutes les valeurs sensibles proviennent de
-    l'environnement (.env en dev, GCP Secret Manager / Cloud Run en prod).
+    l'environnement (.env en dev, Render / GCP Secret Manager en prod).
   - SECRET_KEY obligatoire : fail-fast (ImproperlyConfigured) sans lui.
   - DEBUG dynamique via .env ; démarrage refusé si DEBUG=True en production.
+  - ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS lus depuis l'environnement avec
+    fallback développement ; fail-fast s'ils restent sur localhost en prod.
   - Headers de sécurité, cookies sécurisés et HSTS activables via
     l'environnement (et forcés en production).
   - Rate-limiting d'authentification (django-axes) + throttling API (DRF).
@@ -72,6 +74,29 @@ def _force_https_production(environment: str, valeur_env: bool) -> bool:
     return valeur_env
 
 
+def _verifier_hotes_production(environment: str, allowed_hosts: list, csrf_origins: list) -> None:
+    """En production, ALLOWED_HOSTS et CSRF_TRUSTED_ORIGINS doivent pointer vers
+    le domaine public. Sans cela, Django rejette toutes les requêtes (400) et
+    toutes les soumissions POST (403) : échec explicite au démarrage plutôt
+    qu'une application silencieusement inutilisable. Le fallback de dev
+    (localhost) reste le comportement par défaut hors production."""
+    if environment != "production":
+        return
+    hotes_locaux = {"localhost", "127.0.0.1", "testserver"}
+    if not allowed_hosts or set(allowed_hosts).issubset(hotes_locaux):
+        raise ImproperlyConfigured(
+            "ALLOWED_HOSTS ne contient que des hôtes de développement en "
+            "environnement de production. Définissez le domaine public "
+            "(ex : .onrender.com) via la variable d'environnement ALLOWED_HOSTS."
+        )
+    if not csrf_origins:
+        raise ImproperlyConfigured(
+            "CSRF_TRUSTED_ORIGINS est vide en environnement de production. "
+            "Définissez les origines HTTPS autorisées "
+            "(ex : https://*.onrender.com) via CSRF_TRUSTED_ORIGINS."
+        )
+
+
 def _choisir_email_backend(host_smtp: str) -> str:
     """Backend SMTP si un hôte est fourni, sinon repli sur la console."""
     if host_smtp:
@@ -88,6 +113,10 @@ CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 
 # Fail-fast : DEBUG=True est interdit en production.
 _verifier_mode_production(ENVIRONMENT, DEBUG)
+
+# Fail-fast : en production, ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS doivent être
+# configurés pour le domaine public (pas le fallback de développement).
+_verifier_hotes_production(ENVIRONMENT, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS)
 
 # Headers de sécurité de base
 SECURE_CONTENT_TYPE_NOSNIFF = True

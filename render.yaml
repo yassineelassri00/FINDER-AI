@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — Infrastructure-as-Code pour Finder-AI
+#
+# Crée automatiquement :
+#   1. finder-db : PostgreSQL 16 managé (free-tier, région Frankfurt)
+#   2. finder-ai : Web Service Docker (Dockerfile + gunicorn + whitenoise)
+#
+# Déploiement :
+#   1. Pousser ce fichier sur la branche par défaut du dépôt GitHub.
+#   2. Dashboard Render ▸ New ▸ Blueprint ▸ connecter yassineelassri00/FINDER-AI.
+#   3. Renseigner les secrets demandés (TAVILY_API_KEY, GEMINI_SERVER_API_KEY).
+#   4. Premier déploiement automatique : https://finder-ai.onrender.com
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: finder-db
+    databaseName: finder_ai
+    user: finder_ai
+    plan: free
+    region: frankfurt # Plus proche de Casablanca parmi les régions free-tier
+    ipAllowList: [] # free-tier : accès réseau ouvert (contrainte Render)
+
+services:
+  - type: web
+    name: finder-ai
+    runtime: docker
+    repo: https://github.com/yassineelassri00/FINDER-AI
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./finder_ai_project/Dockerfile
+    dockerContext: ./finder_ai_project
+    healthCheckPath: /
+    autoDeploy: true
+    # Migrations exécutées AVANT le démarrage du nouveau conteneur.
+    # Le CMD du Dockerfile lance ensuite collectstatic + gunicorn.
+    preDeployCommand: python manage.py migrate --noinput
+    envVars:
+      # PostgreSQL managé — chaîne de connexion injectée automatiquement
+      # par Render à partir du service finder-db (psycopg 3 la consomme).
+      - key: DATABASE_URL
+        fromDatabase:
+          name: finder-db
+          property: connectionString
+
+      # SECRET_KEY générée par Render au premier déploiement (256 bits,
+      # base64) ; jamais de clé en dur dans le dépôt.
+      - key: SECRET_KEY
+        generateValue: true
+
+      - key: DEBUG
+        value: "false"
+      - key: ENVIRONMENT
+        value: production
+
+      # Domaine public de l'app sur Render : `.onrender.com` couvre
+      # finder-ai.onrender.com et ses éventuels préviews (plus fallback local).
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com,localhost,127.0.0.1"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
+
+      # HTTPS fourni par Render : HSTS long + modèle Gemini par défaut.
+      - key: SECURE_HSTS_SECONDS
+        value: "31536000"
+      - key: GEMINI_MODEL
+        value: "gemini-2.0-flash"
+
+      # Secrets utilisateur — saisis UNE FOIS dans le Dashboard Render
+      # (`sync: false` : jamais de valeur en clair dans le dépôt).
+      # TAVILY_API_KEY est requis par l'app au démarrage (fail-fast sinon).
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: GEMINI_SERVER_API_KEY
+        sync: false
