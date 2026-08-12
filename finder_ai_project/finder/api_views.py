@@ -884,7 +884,7 @@ def api_upload_fichier(request):
 
     if not taille_autorisee(fichier_django.size):
         from django.conf import settings as conf
-        max_size = getattr(conf, "UPLOAD_MAX_SIZE_BYTES", 10 * 1024 * 1024)
+        max_size = getattr(conf, "UPLOAD_MAX_SIZE_BYTES", 5 * 1024 * 1024)
         max_mo = max_size // (1024 * 1024)
         return _json_error(
             f"Fichier trop volumineux ({fichier_django.size // 1024} Ko). "
@@ -894,11 +894,13 @@ def api_upload_fichier(request):
     # Calcul du MD5 pour déduplication (repositionne le curseur au début)
     hash_md5 = FichierContexte.calculer_md5(fichier_django)
 
-    # Vérification des magic bytes pour les types binaires (image / PDF) :
-    # empêche de servir un fichier malveillant sous une extension autorisée.
-    debut_contenu = fichier_django.read(16)
+    # Vérification du type MIME réel (lecture de l'en-tête du fichier) :
+    # magic bytes pour les binaires, rejet du balisage HTML/SVG/XML/script
+    # déguisé sous une extension texte (XSS stocké). On lit les 2048 premiers
+    # octets pour une détection fiable, indépendamment de l'extension.
+    debut_contenu = fichier_django.read(2048)
     if not contenu_coherent_avec_extension(ext, debut_contenu):
-        return _json_error("Le contenu du fichier ne correspond pas à son extension.")
+        return _json_error("Le contenu du fichier ne correspond pas à son type ou à son extension.")
     fichier_django.seek(0)
 
     # Vérification de doublon exact pour cet utilisateur

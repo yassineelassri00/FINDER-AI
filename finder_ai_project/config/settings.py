@@ -4,13 +4,18 @@ Django settings for config project.
 Configuration "production-grade" :
   - Aucune clé en dur : toutes les valeurs sensibles proviennent de
     l'environnement (.env en dev, GCP Secret Manager / Cloud Run en prod).
-  - Headers de sécurité de base activables via l'environnement.
-  - Rate-limiting d'authentification (django-axes) activable en production.
+  - SECRET_KEY obligatoire : fail-fast (ImproperlyConfigured) sans lui.
+  - DEBUG dynamique via .env ; démarrage refusé si DEBUG=True en production.
+  - Headers de sécurité, cookies sécurisés et HSTS activables via
+    l'environnement (et forcés en production).
+  - Rate-limiting d'authentification (django-axes) + throttling API (DRF).
+  - Logging structuré vers la console pour tracer l'activité en production.
 """
 
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 # ---------------------------------------------------------------------------
 # Chemins de base
@@ -19,6 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
     DEBUG=(bool, False),
+    ENVIRONMENT=(str, "development"),
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1", "testserver"]),
     CSRF_TRUSTED_ORIGINS=(list, []),
     TAVILY_API_KEY=(str, ""),
@@ -37,11 +43,51 @@ environ.Env.read_env(BASE_DIR / ".env")
 # ---------------------------------------------------------------------------
 # SECRET_KEY est OBLIGATOIRE : le serveur refuse de démarrer sans lui.
 # Aucun fallback en dur dans le code (fail fast en production).
-SECRET_KEY = env("SECRET_KEY")
 
+def _verifier_secret_key(valeur: str) -> str:
+    """Lève ImproperlyConfigured si SECRET_KEY est vide/absente (fail fast)."""
+    if not valeur:
+        raise ImproperlyConfigured(
+            "SECRET_KEY est introuvable dans l'environnement (.env ou Secret "
+            "Manager). Le serveur refuse de démarrer sans lui : aucun fallback "
+            "en dur dans le code."
+        )
+    return valeur
+
+
+def _verifier_mode_production(environment: str, debug: bool) -> None:
+    """Interdit DEBUG=True en production : fuite de secrets et de stack traces."""
+    if environment == "production" and debug:
+        raise ImproperlyConfigured(
+            "DEBUG=True est strictement interdit en environnement de "
+            "production (fuite d'informations sensibles et traces de "
+            "débogage). Passez DEBUG=False dans le .env / Secret Manager."
+        )
+
+
+def _force_https_production(environment: str, valeur_env: bool) -> bool:
+    """En production, la sécurité HTTPS est incontournable : on force True."""
+    if environment == "production":
+        return True
+    return valeur_env
+
+
+def _choisir_email_backend(host_smtp: str) -> str:
+    """Backend SMTP si un hôte est fourni, sinon repli sur la console."""
+    if host_smtp:
+        return "django.core.mail.backends.smtp.EmailBackend"
+    return "django.core.mail.backends.console.EmailBackend"
+
+
+SECRET_KEY = _verifier_secret_key(env("SECRET_KEY"))
+
+ENVIRONMENT = env("ENVIRONMENT").strip().lower()
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+
+# Fail-fast : DEBUG=True est interdit en production.
+_verifier_mode_production(ENVIRONMENT, DEBUG)
 
 # Headers de sécurité de base
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -50,13 +96,13 @@ X_FRAME_OPTIONS = "DENY"
 
 # HTTPS derrière un load-balancer / Cloud Run
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = env("SECURE_SSL_REDIRECT")
+SECURE_SSL_REDIRECT = _force_https_production(ENVIRONMENT, env("SECURE_SSL_REDIRECT"))
 
 # Cookies de session
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SECURE = env("SESSION_COOKIE_SECURE")
-CSRF_COOKIE_SECURE = env("CSRF_COOKIE_SECURE")
+SESSION_COOKIE_SECURE = _force_https_production(ENVIRONMENT, env("SESSION_COOKIE_SECURE"))
+CSRF_COOKIE_SECURE = _force_https_production(ENVIRONMENT, env("CSRF_COOKIE_SECURE"))
 
 # HSTS (activé uniquement si SECURE_HSTS_SECONDS > 0)
 SECURE_HSTS_SECONDS = env("SECURE_HSTS_SECONDS")
@@ -160,11 +206,60 @@ AUTHENTICATION_BACKENDS = [
 # ---------------------------------------------------------------------------
 # Rate-limiting d'authentification (django-axes)
 # ---------------------------------------------------------------------------
-AXES_ENABLED = env("AXES_ENABLED")
+# En production, la protection anti-force-brute est incontournable : on force
+# AXES_ENABLED=True même si le .env l'omet par erreur.
+AXES_ENABLED = env("AXES_ENABLED") or ENVIRONMENT == "production"
 AXES_FAILURE_LIMIT = env.int("AXES_FAILURE_LIMIT", default=5)
 AXES_COOLOFF_TIME = env.int("AXES_COOLOFF_TIME", default=2)  # en heures
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+
+# ---------------------------------------------------------------------------
+# Logging — journalisation structurée vers la console (stdout/stderr).
+# Niveau INFO pour Django, WARNING pour les requêtes HTTP.
+# ---------------------------------------------------------------------------
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} - {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "axes": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Internationalisation
@@ -213,13 +308,23 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],
+    # Throttling global (S2) : limite les abus sur l'API (brute force, DoS).
+    # S'applique aux vues DRF — ex. /api/research/.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "20/min",
+        "user": "100/min",
+    },
 }
 
 # ---------------------------------------------------------------------------
 # Limites de téléversement de fichiers
 # ---------------------------------------------------------------------------
-# Taille maximale autorisée pour un fichier de contexte (10 Mo)
-UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 Mo
+# Taille maximale autorisée pour un fichier de contexte (5 Mo)
+UPLOAD_MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5 Mo
 # Extensions acceptées — les types rendables en ligne exécutables (svg, html,
 # xml) sont exclus pour réduire la surface d'attaque (XSS stocké).
 UPLOAD_ALLOWED_EXTENSIONS = {
@@ -228,10 +333,24 @@ UPLOAD_ALLOWED_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".gif",
 }
 
-# Taille maximale du corps des requêtes HTTP.
+# Taille maximale du corps des requêtes HTTP (5 Mo de fichier + overhead
+# multipart) : bloque les dénis de service par corps de requête géants (S2).
 # Doit dépasser UPLOAD_MAX_SIZE_BYTES (le body multipart inclut le fichier).
-DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024  # 12 Mo
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024  # 6 Mo
 FILE_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_SIZE_BYTES  # spool vers disque au-delà
+
+# ---------------------------------------------------------------------------
+# Messagerie — SMTP si configuré, sinon repli sur la console (S3).
+# Sans SMTP, la réinitialisation de mot de passe reste fonctionnelle : l'e-mail
+# est affiché dans les logs au lieu d'échouer silencieusement.
+# ---------------------------------------------------------------------------
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_BACKEND = _choisir_email_backend(EMAIL_HOST)
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Finder AI <noreply@finder-ai.local>")
 
 # ---------------------------------------------------------------------------
 # Planificateur de tâches d'arrière-plan (APScheduler)

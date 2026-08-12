@@ -2,10 +2,13 @@
 Suite de tests unitaires complète pour l'application Finder-AI.
 
 Organisation :
+  ConfigSecuriteTestCase  — Verrous de sécurité settings (S1, S6, Logging)
+  ThrottlingTestCase      — Throttling API DRF renvoyant 429 (S2)
   ModelTestCase        — Tests des modèles ORM et de leurs méthodes
   ViewTestCase         — Tests des vues HTML (authentification, navigation)
   APITestCase          — Tests des endpoints API JSON
   FichierContexteTestCase — Tests de l'upload et de la gestion des fichiers
+  ServiceFichiersTestCase — Tests des règles de validation des uploads (S5)
   PlusPlanTestCase     — Tests de l'activation du Plan Finder Plus
   RechercheSemantiqueTestCase — Tests du moteur TF-IDF
   ScraperTestCase      — Tests du robot de Web Scraping
@@ -15,12 +18,15 @@ import json
 import io
 from unittest import mock
 
+from django.conf import settings as django_settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import Client, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
+from config import settings as settings_module
 from finder.models import (
     Avis,
     Categorie,
@@ -47,6 +53,145 @@ from finder.services.vector_search import (
 
 import tempfile, os
 TEMP_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+# ===========================================================================
+# 1.bis. Tests de la configuration de sécurité (S1, S6, Logging)
+# ===========================================================================
+
+class ConfigSecuriteTestCase(SimpleTestCase):
+    """Fail-fast des secrets, verrous HTTPS en production, throttling & logs."""
+
+    def test_secret_key_absente_leve_improperly_configured(self):
+        """S1 : sans SECRET_KEY (vide), le serveur refuse de démarrer."""
+        with self.assertRaises(ImproperlyConfigured):
+            settings_module._verifier_secret_key("")
+        # Une clé valide passe sans erreur.
+        self.assertEqual(
+            settings_module._verifier_secret_key("secret-de-test"), "secret-de-test"
+        )
+
+    def test_debug_true_interdit_en_production(self):
+        """S1 : DEBUG=True en environnement de production doit faire échouer."""
+        with self.assertRaises(ImproperlyConfigured):
+            settings_module._verifier_mode_production("production", True)
+        # DEBUG reste autorisé en dev et DEBUG=False en prod démarre normalement.
+        settings_module._verifier_mode_production("development", True)
+        settings_module._verifier_mode_production("production", False)
+
+    def test_https_force_en_production(self):
+        """S6 : en production, HTTPS/cookies sécurisés sont incontournables."""
+        self.assertTrue(settings_module._force_https_production("production", False))
+        self.assertTrue(settings_module._force_https_production("production", True))
+        self.assertFalse(settings_module._force_https_production("development", False))
+
+    def test_headers_securite_actives(self):
+        """S6 : X-Frame-Options DENY et protections de base sont actives."""
+        self.assertEqual(django_settings.X_FRAME_OPTIONS, "DENY")
+        self.assertTrue(django_settings.SECURE_CONTENT_TYPE_NOSNIFF)
+        self.assertTrue(django_settings.SESSION_COOKIE_HTTPONLY)
+
+    def test_throttling_configure_dans_rest_framework(self):
+        """S2 : les classes de throttling par défaut sont actives sur l'API."""
+        rf = django_settings.REST_FRAMEWORK
+        self.assertIn(
+            "rest_framework.throttling.AnonRateThrottle",
+            rf["DEFAULT_THROTTLE_CLASSES"],
+        )
+        self.assertIn(
+            "rest_framework.throttling.UserRateThrottle",
+            rf["DEFAULT_THROTTLE_CLASSES"],
+        )
+        self.assertIn("anon", rf["DEFAULT_THROTTLE_RATES"])
+        self.assertIn("user", rf["DEFAULT_THROTTLE_RATES"])
+
+    def test_logging_configure(self):
+        """Logging : niveau INFO pour Django, WARNING pour les requêtes."""
+        self.assertEqual(
+            django_settings.LOGGING["loggers"]["django"]["level"], "INFO"
+        )
+        self.assertEqual(
+            django_settings.LOGGING["loggers"]["django.request"]["level"], "WARNING"
+        )
+        self.assertIn("console", django_settings.LOGGING["handlers"])
+
+    def test_email_backend_repli_console_sans_smtp(self):
+        """S3 : sans SMTP, la messagerie tombe sur le backend console."""
+        # La logique de repli choisit la console sans hôte SMTP, le SMTP sinon.
+        self.assertEqual(
+            settings_module._choisir_email_backend(""),
+            "django.core.mail.backends.console.EmailBackend",
+        )
+        self.assertEqual(
+            settings_module._choisir_email_backend("smtp.example.com"),
+            "django.core.mail.backends.smtp.EmailBackend",
+        )
+        # Le backend effectif reste toujours un backend valide.
+        self.assertIn(
+            settings_module.EMAIL_BACKEND,
+            (
+                "django.core.mail.backends.console.EmailBackend",
+                "django.core.mail.backends.smtp.EmailBackend",
+            ),
+        )
+        # (N.B. : Django remplace EMAIL_BACKEND par locmem pendant la suite de
+        # tests, d'où l'assertion sur le module config et non sur le settings.)
+
+    def test_limite_corps_de_requete(self):
+        """S2 : le corps des requêtes est plafonné (anti-DoS), au-dessus du fichier max."""
+        self.assertLessEqual(django_settings.DATA_UPLOAD_MAX_MEMORY_SIZE, 6 * 1024 * 1024)
+        self.assertGreater(
+            django_settings.DATA_UPLOAD_MAX_MEMORY_SIZE,
+            django_settings.UPLOAD_MAX_SIZE_BYTES,
+        )
+        self.assertLessEqual(django_settings.UPLOAD_MAX_SIZE_BYTES, 5 * 1024 * 1024)
+
+
+# ===========================================================================
+# 1.ter. Tests du throttling DRF (S2)
+# ===========================================================================
+
+class ThrottlingTestCase(TestCase):
+    """Le throttling DRF doit renvoyer 429 au-delà de la limite autorisée."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="throttleuser", password="password123"
+        )
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={"full_name": "T User", "job_role": "dev"}
+        )
+        self.client.login(username="throttleuser", password="password123")
+        self.url = reverse("research_start")
+        self.payload = json.dumps({"query": "agent conversationnel"})
+
+    @mock.patch(
+        "rest_framework.throttling.SimpleRateThrottle.THROTTLE_RATES",
+        {"anon": "3/min", "user": "3/min"},
+    )
+    def test_api_renvoie_429_au_dela_de_la_limite(self):
+        """Limite 3 requêtes/min : la 4e requête est bloquée en 429."""
+        for _ in range(3):
+            self.client.post(self.url, data=self.payload, content_type="application/json")
+        response = self.client.post(
+            self.url, data=self.payload, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 429)
+
+    @mock.patch(
+        "rest_framework.throttling.SimpleRateThrottle.THROTTLE_RATES",
+        {"anon": "2/min", "user": "2/min"},
+    )
+    def test_api_sous_la_limite_n_est_pas_bloquee(self):
+        """Sous la limite, le throttling ne bloque pas (pas de 429)."""
+        response = self.client.post(
+            self.url, data=self.payload, content_type="application/json"
+        )
+        # Le gating Plan Plus s'applique (402), mais pas le throttling.
+        self.assertEqual(response.status_code, 402)
 
 
 # ===========================================================================
@@ -623,6 +768,95 @@ class FichierContexteTestCase(TestCase):
             format="multipart",
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_upload_svg_rejete(self):
+        """S5 : le format .svg (XSS stocké) est strictement interdit."""
+        response = self._upload(
+            name="malicious.svg", content=b"<svg onload=alert(1)></svg>"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
+
+    def test_upload_html_deguise_en_texte_rejete(self):
+        """S5 : un HTML déguisé sous extension .txt doit être rejeté (XSS)."""
+        response = self._upload(
+            name="payload.txt",
+            content=b"<html><script>alert(document.cookie)</script></html>",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
+
+    def test_upload_svg_deguise_en_txt_rejete(self):
+        """S5 : un SVG déguisé sous extension .txt doit être rejeté."""
+        response = self._upload(
+            name="payload.txt", content=b"<svg onload=alert(1)>"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
+
+    def test_upload_pdf_magic_bytes_invalides_rejete(self):
+        """S5 : un fichier .pdf qui n'est pas un vrai PDF est rejeté."""
+        response = self._upload(name="faux.pdf", content=b"Ceci nest pas un pdf")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
+
+    def test_upload_json_valide_accepte(self):
+        """S5 : un fichier .json légitime reste accepté (pas de sur-restriction)."""
+        response = self._upload(
+            name="config.json", content=b'{"outils": ["ChatGPT", "Copilot"]}'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+
+
+# ===========================================================================
+# 4.bis. Tests unitaires du service de validation des fichiers (S5)
+# ===========================================================================
+
+class ServiceFichiersTestCase(SimpleTestCase):
+    """Règles de validation des uploads au niveau du service (files.py)."""
+
+    def test_extension_svg_refusee(self):
+        from finder.services.files import extension_autorisee
+
+        self.assertFalse(extension_autorisee("logo.svg"))
+        self.assertFalse(extension_autorisee("LOGO.SVG"))
+
+    def test_balisage_deguise_detecte(self):
+        """La lecture du type MIME réel rejette le balisage XSS sous texte."""
+        from finder.services.files import contenu_coherent_avec_extension
+
+        self.assertFalse(
+            contenu_coherent_avec_extension(".txt", b"<script>alert(1)</script>")
+        )
+        self.assertFalse(
+            contenu_coherent_avec_extension(".py", b"<svg onload=alert(1)>")
+        )
+        self.assertFalse(
+            contenu_coherent_avec_extension(".txt", b'<?xml version="1.0"?>')
+        )
+        self.assertTrue(
+            contenu_coherent_avec_extension(".txt", b"contenu de test")
+        )
+
+    def test_magic_bytes_images_pdf(self):
+        """Les types binaires doivent correspondre à leurs magic bytes."""
+        from finder.services.files import contenu_coherent_avec_extension
+
+        self.assertTrue(
+            contenu_coherent_avec_extension(".png", b"\x89PNG\r\n\x1a\n" + b"donnees")
+        )
+        self.assertTrue(contenu_coherent_avec_extension(".pdf", b"%PDF-1.4"))
+        self.assertFalse(contenu_coherent_avec_extension(".png", b"<html>"))
+
+    def test_taille_limite_a_5_mo(self):
+        """La taille maximale d'un fichier de contexte est plafonnée (5 Mo)."""
+        from finder.services.files import taille_autorisee
+
+        self.assertTrue(taille_autorisee(4 * 1024 * 1024))
+        self.assertTrue(taille_autorisee(5 * 1024 * 1024))
+        self.assertFalse(taille_autorisee(5 * 1024 * 1024 + 1))
+        self.assertFalse(taille_autorisee(-1))
 
 
 # ===========================================================================

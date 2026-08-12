@@ -414,7 +414,7 @@ def _validate_taille(value):
     """Valide que le fichier ne dépasse pas la taille maximale autorisée."""
     from finder.services.files import taille_autorisee
 
-    max_size = getattr(django_settings, "UPLOAD_MAX_SIZE_BYTES", 10 * 1024 * 1024)
+    max_size = getattr(django_settings, "UPLOAD_MAX_SIZE_BYTES", 5 * 1024 * 1024)
     if not taille_autorisee(value.size):
         max_mo = max_size // (1024 * 1024)
         raise ValidationError(
