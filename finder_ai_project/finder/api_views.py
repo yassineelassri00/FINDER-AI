@@ -52,7 +52,12 @@ from .models import (
     ResearchJob,
 )
 from .serializers import ResearchRequestSerializer
-from .services.research import perform_web_research
+from .services.llm_service import RequiresAPIKeyError, generer_resume_recherche
+from .services.research import (
+    perform_web_research,
+    rechercher_web_tavily,
+    utilisateur_a_acces_web,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +266,11 @@ def api_outils_list(request):
     if query_str and (mode == "semantic" or not qs_texte.exists()):
         try:
             from .services.vector_search import recherche_semantique
-            resultats_sem = recherche_semantique(query_str, top_k=20)
+            resultats_sem = recherche_semantique(
+                query_str,
+                top_k=20,
+                profil=getattr(request.user, "finder_profile", None),
+            )
             if resultats_sem:
                 ids_ordonnes = [o.id for o, _ in resultats_sem]
                 # Préserver l'ordre de pertinence sémantique
@@ -360,6 +369,21 @@ def api_recherche_workspace(request):
     preferred_language = data.get("preferred_language", "fr")
     pricing = data.get("default_pricing") or data.get("budget_preference") or ""
     source_mode = data.get("source_mode", "hybrid")
+
+    # Gating Plan Plus : la recherche web (Tavily) est strictement réservée
+    # aux abonnés Finder Plus. Le mode explicite "web" refuse avec 402 ; le
+    # mode "hybrid" se replie silencieusement sur le catalogue seul.
+    acces_web = utilisateur_a_acces_web(request.user)
+    web_demandee = source_mode in ("web", "hybrid")
+    web_gated = web_demandee and not acces_web
+
+    if source_mode == "web" and not acces_web:
+        return _json_error(
+            "Plan Plus requis pour la recherche web. Activez le Plan Finder Plus "
+            "pour interroger le web en plus du catalogue.",
+            402,
+        )
+
     professional_context = data.get("professional_context", "").strip()
     goals = data.get("goals", []) if isinstance(data.get("goals", []), list) else []
     technology_stack = (
@@ -382,7 +406,14 @@ def api_recherche_workspace(request):
     try:
         from .services.vector_search import recherche_semantique
 
-        semantic_results = recherche_semantique(query_str, top_k=max_results * 2)
+        # Classement personnalisé : le profil (stack, objectifs) booste les
+        # outils qui correspondent aux préférences de l'utilisateur.
+        from .models import UserProfile
+
+        profil_utilisateur = UserProfile.objects.filter(user=request.user).first()
+        semantic_results = recherche_semantique(
+            query_str, top_k=max_results * 2, profil=profil_utilisateur
+        )
     except Exception:
         semantic_results = []
 
@@ -413,6 +444,16 @@ def api_recherche_workspace(request):
             }
         )
         resultats.append(serialized)
+
+    # Recherche web (Tavily) pour les abonnés Plus en mode Hybride/Web.
+    web_results = []
+    if web_demandee and acces_web:
+        try:
+            web_results = rechercher_web_tavily(
+                query_str, max_results=max(1, min(max_results, 10))
+            )
+        except Exception:
+            web_results = []  # Une panne du fournisseur web ne bloque pas le catalogue
 
     meilleur = resultats[0] if resultats else None
     style_label = {
@@ -451,6 +492,33 @@ def api_recherche_workspace(request):
             f"{'s' if len(resultats) != 1 else ''} for '{query_str}'."
         )
 
+    # Résumé IA (Gemini) : remplace la synthèse locale quand une clé est
+    # disponible. Sans clé, on retombe silencieusement sur la synthèse locale.
+    resume_ia = None
+    resume_ia_active = False
+    if resultats:
+        try:
+            texte_ia, provenance = generer_resume_recherche(
+                query_str,
+                resultats,
+                request.user,
+                style=result_style,
+                langue=preferred_language,
+            )
+            if provenance == "ia":
+                resume_ia = texte_ia
+                resume_ia_active = True
+                synthese = texte_ia
+        except RequiresAPIKeyError:
+            # Demande explicite de résumé IA sans clé → 402 Payment Required.
+            if data.get("resume_ia", False):
+                return _json_error(
+                    "Clé Gemini manquante : ajoutez votre clé Gemini dans les "
+                    "paramètres ou activez le Plan Finder Plus pour générer le "
+                    "résumé IA.",
+                    402,
+                )
+
     # Consignation serveur de la recherche (historique réel des recherches).
     try:
         ResearchJob.objects.create(
@@ -463,11 +531,22 @@ def api_recherche_workspace(request):
     except Exception:
         pass  # La consignation ne doit jamais faire échouer la recherche
 
+    if source_mode == "catalog":
+        mode_label = "catalogue seul"
+    elif web_gated:
+        mode_label = "catalogue seul (recherche web réservée au Plan Plus)"
+    elif web_results:
+        mode_label = f"catalogue + web ({len(web_results)} source(s) Tavily)"
+    else:
+        mode_label = "catalogue + web"
+
     points_cles = [
         f"{len(resultats)} reference(s) classee(s) selon la pertinence du mot-cle.",
         "Les filtres de budget et de profil influencent le classement.",
-        "Le mode source choisi est " + ("catalogue seul" if source_mode == "catalog" else "catalogue + web"),
+        "Le mode source choisi est " + mode_label + ".",
     ]
+    if resume_ia_active:
+        points_cles.append("Le resume IA est genere par Gemini a partir des outils candidats.")
     if result_style == "detailed":
         points_cles.append("Le style detaille conserve plus de contexte dans la synthese.")
     if result_style == "decision":
@@ -476,8 +555,12 @@ def api_recherche_workspace(request):
     return _json_ok(
         {
             "synthese": synthese,
+            "resume_ia": resume_ia,
+            "resume_ia_active": resume_ia_active,
             "meilleur_outil": meilleur,
             "resultats": resultats,
+            "web_results": web_results,
+            "web_gated": web_gated,
             "points_cles": points_cles,
             "recherches_restantes": _recherches_restantes(request.user),
             "quota": _quota_info(request.user),
@@ -487,6 +570,7 @@ def api_recherche_workspace(request):
                 "preferred_language": preferred_language,
                 "default_pricing": pricing or "all",
                 "source_mode": source_mode,
+                "source_mode_effectif": "catalog" if web_gated else source_mode,
             },
         }
     )
@@ -706,6 +790,19 @@ class ResearchStartAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Gating Plan Plus : la recherche web est strictement réservée aux abonnés.
+        if not _est_abonne_plus(request.user):
+            return Response(
+                {
+                    "ok": False,
+                    "error": (
+                        "Plan Plus requis pour la recherche web. Activez le Plan "
+                        "Finder Plus pour interroger le web en plus du catalogue."
+                    ),
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
         # Quota gratuit : 3 recherches au total (illimité avec Finder Plus)
         if _quota_info(request.user)["limit_reached"]:
             return Response(

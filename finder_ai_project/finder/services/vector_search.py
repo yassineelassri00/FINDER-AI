@@ -23,6 +23,11 @@ from typing import Optional
 
 _index: Optional[dict] = None  # dict avec "idf", "tf_idf_matrix", "outils"
 
+# Bonus appliqué au score de similarité quand un outil correspond au profil
+# utilisateur (stack technique + objectifs). Une correspondance totale peut
+# ajouter jusqu'à 25 % au score, le tout plafonné à 1.0.
+BONUS_PROFIL = 0.25
+
 
 def _tokenizer(texte: str) -> list[str]:
     """Découpe un texte en tokens minuscules, sans ponctuation ni stopwords courants."""
@@ -100,6 +105,50 @@ def _similarite_cosinus(vec_a: dict, vec_b: dict) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Personnalisation du classement par profil utilisateur (Plan Finder-AI)
+# ---------------------------------------------------------------------------
+
+def _tokens_profil(profil) -> set[str]:
+    """
+    Extrait les tokens significatifs du profil utilisateur.
+
+    Sources : stack technique, objectifs (goals) et contexte professionnel.
+    """
+    if profil is None:
+        return set()
+
+    parties = []
+    for champ in ("technology_stack", "goals"):
+        valeurs = getattr(profil, champ, None)
+        if isinstance(valeurs, list):
+            parties.append(" ".join(str(v) for v in valeurs))
+    contexte = getattr(profil, "professional_context", "") or ""
+    if isinstance(contexte, str):
+        parties.append(contexte)
+
+    return set(_tokenizer(" ".join(parties)))
+
+
+def _bonus_personnalisation(outil, tokens_profil: set[str]) -> float:
+    """
+    Multiplicateur ≥ 1.0 si l'outil correspond au profil utilisateur.
+
+    Retourne 1.0 (aucun bonus) si le profil est vide ou si l'outil ne partage
+    aucun token avec lui.
+    """
+    if not tokens_profil:
+        return 1.0
+
+    tokens_outil = set(_tokenizer(_construire_document(outil)))
+    correspondances = tokens_profil & tokens_outil
+    if not correspondances:
+        return 1.0
+
+    ratio = len(correspondances) / len(tokens_profil)
+    return 1.0 + (BONUS_PROFIL * ratio)
+
+
+# ---------------------------------------------------------------------------
 # API publique
 # ---------------------------------------------------------------------------
 
@@ -135,13 +184,16 @@ def _construire_index():
     }
 
 
-def recherche_semantique(requete: str, top_k: int = 5) -> list[tuple]:
+def recherche_semantique(requete: str, top_k: int = 5, profil=None) -> list[tuple]:
     """
     Recherche les outils IA les plus pertinents pour une requête en langage naturel.
 
     Args:
         requete : Texte de la requête utilisateur.
         top_k   : Nombre maximum de résultats à retourner.
+        profil  : UserProfile optionnel — les outils correspondant à la stack
+                  technique ou aux objectifs de l'utilisateur reçoivent un
+                  bonus de pertinence (personnalisation du classement).
 
     Returns:
         Liste de tuples (OutilIA, score) triée par pertinence décroissante.
@@ -170,13 +222,19 @@ def recherche_semantique(requete: str, top_k: int = 5) -> list[tuple]:
     norme = math.sqrt(sum(v * v for v in vecteur_requete.values())) or 1.0
     vecteur_requete = {t: v / norme for t, v in vecteur_requete.items()}
 
-    # Calcul de la similarité avec chaque outil
-    scores = [
-        (_index["outils"][i], _similarite_cosinus(vecteur_requete, vec))
-        for i, vec in enumerate(_index["tf_idf_matrix"])
-    ]
+    # Personnalisation : bonus de classement selon le profil utilisateur.
+    tokens_profil = _tokens_profil(profil)
+
+    # Calcul de la similarité avec chaque outil (score plafonné à 1.0)
+    scores = []
+    for i, vec in enumerate(_index["tf_idf_matrix"]):
+        outil = _index["outils"][i]
+        base = _similarite_cosinus(vecteur_requete, vec)
+        if base <= 0.0:
+            continue
+        bonus = _bonus_personnalisation(outil, tokens_profil)
+        scores.append((outil, min(1.0, base * bonus)))
 
     # Tri décroissant et filtre des scores nuls
-    scores_filtres = [(o, s) for o, s in scores if s > 0.0]
-    scores_filtres.sort(key=lambda x: x[1], reverse=True)
-    return scores_filtres[:top_k]
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return scores[:top_k]

@@ -193,6 +193,14 @@ MEDIA_ROOT = BASE_DIR / "media"
 TAVILY_API_KEY = env("TAVILY_API_KEY")
 
 # ---------------------------------------------------------------------------
+# Clé API externe : Gemini (résumé IA génératif)
+# Modèle de clé hybride : clé personnelle (UserProfile.gemini_api_key) en
+# priorité, sinon clé serveur réservée aux abonnés Finder Plus.
+# ---------------------------------------------------------------------------
+GEMINI_SERVER_API_KEY = env("GEMINI_SERVER_API_KEY", default="")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-2.0-flash")
+
+# ---------------------------------------------------------------------------
 # Django REST Framework — Configuration globale
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {

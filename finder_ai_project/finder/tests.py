@@ -13,6 +13,7 @@ Organisation :
 
 import json
 import io
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -32,6 +33,7 @@ from finder.models import (
     UserProfile,
 )
 from finder.scraper import FinderScraper
+from finder.services.llm_service import RequiresAPIKeyError
 from finder.services.vector_search import (
     _tokenizer,
     invalider_index,
@@ -750,6 +752,294 @@ class RechercheSemantiqueTestCase(TestCase):
     def test_recherche_vide(self):
         resultats = recherche_semantique("")
         self.assertEqual(resultats, [])
+
+
+    def test_recherche_personnalisee_profil_stack(self):
+        """Un profil avec technology_stack=['code'] doit booster le score de
+        GitHub Copilot (qui correspond) sans toucher à celui de DALL-E."""
+        invalider_index()
+        resultats_sans_profil = {
+            o.id: s for o, s in recherche_semantique("génération")
+        }
+
+        user = User.objects.create_user(username="profiluser", password="password123")
+        profile = UserProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "full_name": "Profil User",
+                "job_role": "dev",
+                "technology_stack": ["code"],
+                "goals": [],
+                "professional_context": "",
+            },
+        )[0]
+
+        resultats_avec_profil = {
+            o.id: s for o, s in recherche_semantique("génération", profil=profile)
+        }
+
+        # Copilot (outil2) correspond à la stack "code" : score boosté de 25 %.
+        self.assertGreater(
+            resultats_avec_profil[self.outil2.id],
+            resultats_sans_profil[self.outil2.id],
+        )
+        self.assertAlmostEqual(
+            resultats_avec_profil[self.outil2.id],
+            resultats_sans_profil[self.outil2.id] * 1.25,
+            places=6,
+        )
+        # DALL-E (outil1) ne correspond pas : score inchangé.
+        self.assertEqual(
+            resultats_avec_profil[self.outil1.id],
+            resultats_sans_profil[self.outil1.id],
+        )
+        # Le bonus fait passer Copilot devant DALL-E dans le classement.
+        ids_avec = [o.id for o, _ in recherche_semantique("génération", profil=profile)]
+        self.assertEqual(ids_avec, [self.outil2.id, self.outil1.id])
+
+    def test_bonus_personnalisation_cap_a_un(self):
+        """Le score final ne doit jamais dépasser 1.0 malgré le bonus."""
+        from finder.services.vector_search import _bonus_personnalisation
+
+        user = User.objects.create_user(username="bonususer", password="password123")
+        profile = UserProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "full_name": "Bonus User",
+                "job_role": "dev",
+                "technology_stack": ["code"],
+                "goals": [],
+            },
+        )[0]
+        from finder.services.vector_search import _tokens_profil
+
+        tokens = _tokens_profil(profile)
+        # Copilot correspond totalement au profil : bonus max 1.25.
+        bonus = _bonus_personnalisation(self.outil2, tokens)
+        self.assertEqual(bonus, 1.25)
+        # DALL-E ne correspond pas : aucun bonus.
+        self.assertEqual(_bonus_personnalisation(self.outil1, tokens), 1.0)
+
+
+# ===========================================================================
+# 6.bis. Tests du service LLM (Gemini) — P2
+# ===========================================================================
+
+class LLMServiceTestCase(TestCase):
+    """Résolution de la clé Gemini et génération du résumé IA."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="llmuser", password="password123")
+        # Le signal post_save crée déjà un profil : on le récupère / le complète.
+        self.profile = UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "LLM User", "job_role": "dev"},
+        )[0]
+        self.resultats = [
+            {
+                "nom": "ChatGPT",
+                "description": "Agent conversationnel d'OpenAI",
+                "categorie": {"nom": "NLP"},
+                "score_pertinence": 0.9,
+            }
+        ]
+
+    def test_cle_personnelle_prime(self):
+        """Une clé personnelle est toujours utilisée en premier."""
+        from finder.services.llm_service import _resoudre_cle_api
+
+        self.profile.gemini_api_key = "cle-personnelle"
+        self.profile.save()
+        self.assertEqual(_resoudre_cle_api(self.user), "cle-personnelle")
+
+    @override_settings(GEMINI_SERVER_API_KEY="cle-serveur-test")
+    def test_abonne_plus_utilise_la_cle_serveur(self):
+        """Sans clé personnelle, un abonné Plus utilise la clé serveur."""
+        from finder.services.llm_service import _resoudre_cle_api
+
+        self.profile.est_abonne_plus = True
+        self.profile.save()
+        self.assertEqual(_resoudre_cle_api(self.user), "cle-serveur-test")
+
+    @override_settings(GEMINI_SERVER_API_KEY="cle-serveur-test")
+    def test_non_abonne_sans_cle_leve_RequiresAPIKeyError(self):
+        """Gratuit + aucune clé → RequiresAPIKeyError (converti en 402 par l'API)."""
+        from finder.services.llm_service import _resoudre_cle_api
+
+        with self.assertRaises(RequiresAPIKeyError):
+            _resoudre_cle_api(self.user)
+
+    @override_settings(GEMINI_SERVER_API_KEY="cle-serveur-test")
+    @mock.patch(
+        "finder.services.llm_service._generer_texte_gemini",
+        return_value="Synthèse IA de test.",
+    )
+    def test_resume_ia_genere(self, mock_gemini):
+        """Avec une clé résolvable, Gemini génère le résumé (provenance 'ia')."""
+        from finder.services.llm_service import generer_resume_recherche
+
+        self.profile.est_abonne_plus = True
+        self.profile.save()
+        texte, provenance = generer_resume_recherche(
+            "agent conversationnel", self.resultats, self.user
+        )
+        self.assertEqual(provenance, "ia")
+        self.assertEqual(texte, "Synthèse IA de test.")
+        mock_gemini.assert_called_once()
+
+    @override_settings(GEMINI_SERVER_API_KEY="cle-serveur-test")
+    @mock.patch(
+        "finder.services.llm_service._generer_texte_gemini",
+        side_effect=TimeoutError("timeout Gemini"),
+    )
+    def test_panne_gemini_replie_sans_crash(self, mock_gemini):
+        """Une panne externe de Gemini ne remonte jamais : repli sans crash."""
+        from finder.services.llm_service import generer_resume_recherche
+
+        self.profile.est_abonne_plus = True
+        self.profile.save()
+        texte, provenance = generer_resume_recherche(
+            "agent conversationnel", self.resultats, self.user
+        )
+        self.assertEqual(provenance, "fallback")
+        self.assertIn("ChatGPT", texte)
+
+
+# ===========================================================================
+# 6.ter. Tests d'intégration API — gating Plan Plus et résumé IA (P2)
+# ===========================================================================
+
+class RechercheWebGatingTestCase(TestCase):
+    """Gating Plan Plus de la recherche web et intégration du résumé IA."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username="gatuser", password="password123")
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "Gat User", "job_role": "dev"},
+        )
+        self.categorie = Categorie.objects.create(nom="Image", slug="image")
+        self.outil = OutilIA.objects.create(
+            nom="DALL-E",
+            description="Génération d'images par intelligence artificielle",
+            url_site="https://openai.com/dall-e",
+            type_tarification="Payant",
+            type_integration="API",
+            categorie=self.categorie,
+            est_valide=True,
+        )
+        self.client.login(username="gatuser", password="password123")
+        from finder.services.vector_search import invalider_index
+
+        invalider_index()
+
+    def test_mode_web_explicite_requiert_plan_plus(self):
+        """source_mode='web' sans abonnement → 402 Payment Required."""
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "génération images", "source_mode": "web"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 402)
+        self.assertFalse(response.json()["ok"])
+        self.assertIn("Plan Plus", response.json()["error"])
+
+    def test_mode_hybride_gratuit_se_replie_sur_le_catalogue(self):
+        """source_mode='hybrid' sans abonnement → 200, web_gated=True, pas de web."""
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "génération images", "source_mode": "hybrid"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["web_gated"])
+        self.assertEqual(data["web_results"], [])
+        self.assertEqual(data["preferences_appliquees"]["source_mode_effectif"], "catalog")
+
+    def test_mode_web_abonne_plus_declenche_tavily(self):
+        """Un abonné Plus en mode hybride déclenche réellement le client Tavily."""
+        profile = UserProfile.objects.get(user=self.user)
+        profile.est_abonne_plus = True
+        profile.save()
+
+        mock_web = [
+            {
+                "title": "Article IA",
+                "url": "https://exemple.fr/ia",
+                "domain": "exemple.fr",
+                "content": "Extrait pertinent",
+                "score": 0.9,
+            }
+        ]
+        with mock.patch(
+            "finder.api_views.rechercher_web_tavily", return_value=mock_web
+        ):
+            response = self.client.post(
+                reverse("api_recherche_workspace"),
+                data=json.dumps({"q": "génération images", "source_mode": "hybrid"}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["web_gated"])
+        self.assertEqual(len(data["web_results"]), 1)
+        self.assertEqual(data["web_results"][0]["title"], "Article IA")
+
+    def test_resume_ia_explicite_sans_cle_renvoie_402(self):
+        """resume_ia=True sans clé Gemini résolvable → 402."""
+        response = self.client.post(
+            reverse("api_recherche_workspace"),
+            data=json.dumps({"q": "génération images", "resume_ia": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 402)
+        self.assertIn("Clé Gemini manquante", response.json()["error"])
+
+    def test_resume_ia_remplace_la_synthese(self):
+        """Quand Gemini répond, la synthèse exposée est le résumé IA."""
+        with mock.patch(
+            "finder.api_views.generer_resume_recherche",
+            return_value=("Résumé IA généré par Gemini.", "ia"),
+        ):
+            response = self.client.post(
+                reverse("api_recherche_workspace"),
+                data=json.dumps({"q": "génération images"}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["resume_ia_active"])
+        self.assertEqual(data["synthese"], "Résumé IA généré par Gemini.")
+        self.assertEqual(data["resume_ia"], "Résumé IA généré par Gemini.")
+
+    def test_resume_ia_panne_replie_sans_erreur(self):
+        """Une panne Gemini (sans clé) ne fait pas échouer la recherche (200)."""
+        with mock.patch(
+            "finder.api_views.generer_resume_recherche",
+            side_effect=RequiresAPIKeyError("pas de clé"),
+        ):
+            response = self.client.post(
+                reverse("api_recherche_workspace"),
+                data=json.dumps({"q": "génération images"}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["resume_ia_active"])
+        self.assertIsNone(data["resume_ia"])
+        self.assertTrue(data["synthese"])
+
+    def test_research_start_requiert_plan_plus(self):
+        """Le endpoint /api/research/ (tâche Tavily) refuse les non-Plus en 402."""
+        response = self.client.post(
+            reverse("research_start"),
+            data=json.dumps({"query": "agent conversationnel"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 402)
 
 
 # ===========================================================================
