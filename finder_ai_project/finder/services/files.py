@@ -87,6 +87,13 @@ def contenu_coherent_avec_extension(extension: str, debut_contenu: bytes) -> boo
 def _est_markup(debut_contenu: bytes) -> bool:
     """Détecte un balisage HTML/SVG/XML/script au début du contenu réel."""
     en_tete = debut_contenu.lstrip()[:1024].lower()
+    # Un marqueur d'ordre des octets (BOM UTF-8/UTF-16) en tête ne doit pas
+    # court-circuiter la détection : un `<html>` précédé d'un BOM reste du
+    # balisage rendable par le navigateur.
+    for bom in (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff"):
+        if en_tete.startswith(bom):
+            en_tete = en_tete[len(bom):]
+            break
     return any(en_tete.startswith(m) for m in _MARQUEURS_MARKUP)
 
 

@@ -423,6 +423,27 @@ def _validate_taille(value):
         )
 
 
+def _validate_contenu(value):
+    """Valide que le type MIME réel (en-tête) correspond à l'extension déclarée.
+
+    Défense en profondeur : mêmes règles que la vue API (/api/fichiers/upload/)
+    — cf. finder/services/files.py — appliquées aussi aux chemins d'écriture
+    hors API (admin, formulaires, gestionnaires) :
+      * types binaires (image/PDF) : contrôle strict des magic bytes,
+      * types texte/code : rejet du balisage HTML/SVG/XML/script déguisé
+        (XSS stocké), quelle que soit l'extension déclarée.
+    """
+    from finder.services.files import contenu_coherent_avec_extension
+
+    ext = os.path.splitext(value.name)[1].lower()
+    debut_contenu = value.read(2048)
+    value.seek(0)
+    if not contenu_coherent_avec_extension(ext, debut_contenu):
+        raise ValidationError(
+            "Le contenu du fichier ne correspond pas à son type ou à son extension."
+        )
+
+
 class FichierContexte(models.Model):
     """Fichier téléversé par un utilisateur et associé à ses projets de recherche."""
 
@@ -442,7 +463,7 @@ class FichierContexte(models.Model):
     )
     fichier = models.FileField(
         upload_to=_upload_context_path,
-        validators=[_validate_extension, _validate_taille],
+        validators=[_validate_extension, _validate_taille, _validate_contenu],
     )
     extension = models.CharField(max_length=20)
     taille_octets = models.BigIntegerField(default=0)

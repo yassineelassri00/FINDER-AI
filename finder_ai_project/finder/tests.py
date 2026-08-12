@@ -808,6 +808,63 @@ class FichierContexteTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
 
+    def test_model_rejette_html_deguise_sans_passer_par_api(self):
+        """S5 : le validateur MODÈLE rejette le balisage XSS, même hors API
+        (admin, formulaires) — défense en profondeur."""
+        from django.core.exceptions import ValidationError
+
+        fichier = SimpleUploadedFile(
+            "payload.txt",
+            b"<html><script>alert(1)</script></html>",
+            content_type="text/plain",
+        )
+        obj = FichierContexte(
+            user=self.user,
+            nom_original="payload.txt",
+            extension=".txt",
+            taille_octets=fichier.size,
+            hash_md5="x",
+        )
+        obj.fichier = fichier
+        with self.assertRaises(ValidationError):
+            obj.full_clean()
+
+    def test_model_rejette_pdf_aux_magic_bytes_invalides(self):
+        """S5 : le validateur MODÈLE rejette un .pdf dont le contenu n'en est pas un."""
+        from django.core.exceptions import ValidationError
+
+        fichier = SimpleUploadedFile(
+            "faux.pdf",
+            b"Ceci nest pas un pdf",
+            content_type="application/pdf",
+        )
+        obj = FichierContexte(
+            user=self.user,
+            nom_original="faux.pdf",
+            extension=".pdf",
+            taille_octets=fichier.size,
+            hash_md5="x",
+        )
+        obj.fichier = fichier
+        with self.assertRaises(ValidationError):
+            obj.full_clean()
+
+    def test_model_accepte_texte_legitime(self):
+        """S5 : le validateur MODÈLE laisse passer un fichier texte propre."""
+        fichier = SimpleUploadedFile(
+            "notes.txt", b"contenu de test", content_type="text/plain"
+        )
+        obj = FichierContexte(
+            user=self.user,
+            nom_original="notes.txt",
+            extension=".txt",
+            taille_octets=fichier.size,
+            hash_md5="x",
+        )
+        obj.fichier = fichier
+        # full_clean() ne doit lever aucune ValidationError
+        self.assertIsNone(obj.full_clean())
+
 
 # ===========================================================================
 # 4.bis. Tests unitaires du service de validation des fichiers (S5)
@@ -848,6 +905,25 @@ class ServiceFichiersTestCase(SimpleTestCase):
         )
         self.assertTrue(contenu_coherent_avec_extension(".pdf", b"%PDF-1.4"))
         self.assertFalse(contenu_coherent_avec_extension(".png", b"<html>"))
+
+    def test_balisage_avec_bom_utf8_detecte(self):
+        """Un préfixe BOM UTF-8 ne doit pas court-circuiter la détection du balisage."""
+        from finder.services.files import contenu_coherent_avec_extension
+
+        self.assertFalse(
+            contenu_coherent_avec_extension(
+                ".txt", b"\xef\xbb\xbf<html><script>alert(1)</script>"
+            )
+        )
+        self.assertFalse(
+            contenu_coherent_avec_extension(
+                ".txt", b"\xef\xbb\xbf<svg onload=alert(1)>"
+            )
+        )
+        # Un texte UTF-8 légitime avec BOM reste accepté
+        self.assertTrue(
+            contenu_coherent_avec_extension(".txt", b"\xef\xbb\xbfcontenu de test")
+        )
 
     def test_taille_limite_a_5_mo(self):
         """La taille maximale d'un fichier de contexte est plafonnée (5 Mo)."""
