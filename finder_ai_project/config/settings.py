@@ -129,6 +129,9 @@ INSTALLED_APPS = [
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Whitenoise DOIT venir immédiatement après SecurityMiddleware pour
+    # servir les fichiers statiques compressés (gzip/brotli) en production.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -163,20 +166,27 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ---------------------------------------------------------------------------
-# Base de données — SQLite en développement, PostgreSQL en production
-# via DATABASE_URL=postgres://user:pass@host:5432/dbname dans .env
+# Base de données — PostgreSQL en production via DATABASE_URL
+# (ex : postgres://user:pass@host:5432/dbname). Sans DATABASE_URL, repli
+# transparent sur la base SQLite locale : le développement et les tests
+# continuent de fonctionner sans aucune configuration supplémentaire.
 # ---------------------------------------------------------------------------
-DATABASE_URL = env("DATABASE_URL", default="")
-if DATABASE_URL:
-    import dj_database_url  # type: ignore
-    DATABASES = {"default": dj_database_url.config(default=DATABASE_URL, conn_max_age=600)}
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-            # OPTIONS WAL activé dans FinderConfig.ready() pour la concurrence
-        }
+import dj_database_url
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{(BASE_DIR / 'db.sqlite3').as_posix()}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
+# DATABASE_URL défini mais vide (cas du .env de développement) : dj-database-url
+# retourne alors {} — on retombe explicitement sur SQLite.
+if not DATABASES["default"]:
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+        # OPTIONS WAL activé dans FinderConfig.ready() pour la concurrence
     }
 
 # ---------------------------------------------------------------------------
@@ -275,6 +285,20 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Whitenoise : compression gzip/brotli + cache-busting par hash de contenu.
+# En développement (DEBUG=True) le manifeste n'est pas requis : Django sert
+# les fichiers via le runserver, le comportement reste identique.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+# Fichiers immuables (noms hashés) : cache navigateur long sans risque.
+WHITENOISE_MAX_AGE = 60 * 60 * 24 * 30  # 30 jours
 
 # ---------------------------------------------------------------------------
 # Fichiers médias (uploads utilisateurs : fichiers de contexte, pièces jointes)

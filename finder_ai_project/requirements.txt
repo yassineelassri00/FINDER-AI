@@ -9,3 +9,11 @@ beautifulsoup4==4.15.0
 tavily-python==0.7.27
 google-generativeai==0.8.6
 tzdata==2026.3
+
+# ─── Déploiement production ────────────────────────────────────────────────
+# Serveur WSGI (Linux/Docker uniquement — gunicorn ne s'exécute pas sous Windows)
+gunicorn==26.0.0
+# Fichiers statiques servis par l'app Django elle-même (pas de nginx requis)
+whitenoise==6.12.0
+# PostgreSQL (psycopg 3) — repli transparent sur SQLite via dj-database-url
+psycopg[binary]==3.3.4
